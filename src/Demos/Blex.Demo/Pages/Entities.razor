@@ -20,7 +20,7 @@
     <h2>Declaring one</h2>
     <p>
         The adapter holds the id selector, so it is not serializable - keep it as a
-        <code>static readonly</code> field. The <code>[BlexStateAttribute]</code> field holds the state itself.
+        <code>static readonly</code> field. The <code>[BlexState]</code> field holds the state itself.
     </p>
 
     <CodeBlock Code="@Declare" />
@@ -119,7 +119,7 @@
     <h2>BlexEntityAdapter operations</h2>
     <p>
         Every operation takes the current state and returns the next one. Assign the result back to
-        the <code>[BlexStateAttribute]</code> property - that assignment is what makes the change visible.
+        the <code>[BlexState]</code> property - that assignment is what makes the change visible.
     </p>
     <ApiTable Rows="@AdapterRows" />
 
@@ -181,7 +181,7 @@
 
     <h2>Deriving views</h2>
     <p>
-        Pair the adapter with <a href="computed"><code>[BlexComputedAttribute]</code></a> to project filtered or
+        Pair the adapter with <a href="computed"><code>[BlexComputed]</code></a> to project filtered or
         aggregated views. They are memoized, so a filtered list is rebuilt once per change rather
         than once per render.
     </p>
@@ -266,16 +266,16 @@
         """;
 
     private const string Declare = """
-        [BlexStoreAttribute(Name = "contacts")]
+        [BlexStore(Name = "contacts")]
         public partial class ContactsStore
         {
             // Holds the id selector, so it is static and never serialized.
             private static readonly BlexEntityAdapter<Contact, int> Adapter = new(c => c.Id);
 
-            [BlexStateAttribute] private BlexEntityState<Contact, int> _contacts = Adapter.GetInitialState();
+            [BlexState] private BlexEntityState<Contact, int> _contacts = Adapter.GetInitialState();
 
-            [BlexActionAttribute] private void OnAdd(Contact c)    => Contacts = Adapter.AddOne(Contacts, c);
-            [BlexActionAttribute] private void OnRemove(int id)    => Contacts = Adapter.RemoveOne(Contacts, id);
+            [BlexAction] private void OnAdd(Contact c)    => Contacts = Adapter.AddOne(Contacts, c);
+            [BlexAction] private void OnRemove(int id)    => Contacts = Adapter.RemoveOne(Contacts, id);
         }
         """;
 
@@ -285,49 +285,49 @@
         """;
 
     private const string StoreSource = """
-        [BlexStoreAttribute(Name = "contacts")]
+        [BlexStore(Name = "contacts")]
         public partial class ContactsStore
         {
             private static readonly BlexEntityAdapter<Contact, int> Adapter =
                 new(c => c.Id, Comparer<Contact>.Create((a, b) => string.CompareOrdinal(a.Name, b.Name)));
 
-            [BlexStateAttribute] private BlexEntityState<Contact, int> _contacts = Adapter.GetInitialState([...]);
-            [BlexStateAttribute] private string _teamFilter = "All";
+            [BlexState] private BlexEntityState<Contact, int> _contacts = Adapter.GetInitialState([...]);
+            [BlexState] private string _teamFilter = "All";
 
-            [BlexComputedAttribute] private int ComputeTotal()   => Contacts.Count;
-            [BlexComputedAttribute] private int ComputeStarred() => Contacts.All.Count(c => c.Starred);
+            [BlexComputed] private int ComputeTotal()   => Contacts.Count;
+            [BlexComputed] private int ComputeStarred() => Contacts.All.Count(c => c.Starred);
 
-            [BlexComputedAttribute]
+            [BlexComputed]
             private IReadOnlyList<Contact> ComputeVisible()
                 => TeamFilter == "All"
                     ? [.. Contacts.All]
                     : [.. Contacts.All.Where(c => c.Team == TeamFilter)];
 
-            [BlexActionAttribute] private void OnAdd(string name, string team)
+            [BlexAction] private void OnAdd(string name, string team)
                 => Contacts = Adapter.AddOne(Contacts, new Contact(_nextId++, name, team, false));
 
-            [BlexActionAttribute] private void OnToggleStar(int id)
+            [BlexAction] private void OnToggleStar(int id)
                 => Contacts = Adapter.UpdateOne(Contacts, id, c => c with { Starred = !c.Starred });
 
-            [BlexActionAttribute] private void OnStarAll()
+            [BlexAction] private void OnStarAll()
                 => Contacts = Adapter.Map(Contacts, c => c with { Starred = true });
 
-            [BlexActionAttribute] private void OnRemoveUnstarred()
+            [BlexAction] private void OnRemoveUnstarred()
                 => Contacts = Adapter.RemoveMany(Contacts,
                        [.. Contacts.All.Where(c => !c.Starred).Select(c => c.Id)]);
         }
         """;
 
     private const string Usage = """
-        [BlexActionAttribute] private void OnUpsert(Todo todo) => Todos = Adapter.UpsertOne(Todos, todo);
-        [BlexActionAttribute] private void OnToggle(int id)    => Todos = Adapter.UpdateOne(Todos, id, t => t with { Done = !t.Done });
-        [BlexActionAttribute] private void OnRemove(int id)    => Todos = Adapter.RemoveOne(Todos, id);
-        [BlexActionAttribute] private void OnLoaded(Todo[] t)  => Todos = Adapter.SetAll(Todos, t);
+        [BlexAction] private void OnUpsert(Todo todo) => Todos = Adapter.UpsertOne(Todos, todo);
+        [BlexAction] private void OnToggle(int id)    => Todos = Adapter.UpdateOne(Todos, id, t => t with { Done = !t.Done });
+        [BlexAction] private void OnRemove(int id)    => Todos = Adapter.RemoveOne(Todos, id);
+        [BlexAction] private void OnLoaded(Todo[] t)  => Todos = Adapter.SetAll(Todos, t);
         """;
 
     private const string SetVsUpsert = """
         // The row may have been deleted while the save was in flight. UpsertOne would put it back.
-        [BlexEffectAttribute]
+        [BlexEffect]
         private async Task OnSave(Todo todo)
         {
             var saved = await _api.PutAsync(todo);
@@ -335,11 +335,11 @@
         }
 
         // Same rule for a batch: ids the user removed in the meantime are ignored.
-        [BlexActionAttribute] private void OnPatched(Todo[] changed) => Todos = Adapter.SetMany(Todos, changed);
+        [BlexAction] private void OnPatched(Todo[] changed) => Todos = Adapter.SetMany(Todos, changed);
         """;
 
     private const string NoOpIdentity = """
-        [BlexEffectAttribute(Mode = BlexEffectConcurrency.Drop)]
+        [BlexEffect(Mode = BlexEffectConcurrency.Drop)]
         private async Task OnPoll()
         {
             var fresh = await _api.GetTodosAsync();
@@ -350,9 +350,9 @@
         """;
 
     private const string Computed = """
-        [BlexComputedAttribute] private int ComputeRemaining() => Todos.All.Count(t => !t.Done);
+        [BlexComputed] private int ComputeRemaining() => Todos.All.Count(t => !t.Done);
 
-        [BlexComputedAttribute]
+        [BlexComputed]
         private IReadOnlyList<Todo> ComputeVisible() => Filter switch
         {
             Filter.Active => [.. Todos.All.Where(t => !t.Done)],

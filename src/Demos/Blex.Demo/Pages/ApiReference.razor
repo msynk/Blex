@@ -49,7 +49,7 @@
             <thead><tr><th>You declare</th><th>Generated</th></tr></thead>
             <tbody>
                 <tr>
-                    <td><code>[BlexStoreAttribute]</code> on <code>partial class Foo</code></td>
+                    <td><code>[BlexStore]</code> on <code>partial class Foo</code></td>
                     <td>
                         <code>partial class Foo : BlexStoreBase</code>,
                         <code>override string Name</code>,
@@ -58,27 +58,27 @@
                     </td>
                 </tr>
                 <tr>
-                    <td><code>[BlexStoreAttribute(Persist = true)]</code></td>
+                    <td><code>[BlexStore(Persist = true)]</code></td>
                     <td><code>override bool Persist =&gt; true</code></td>
                 </tr>
                 <tr>
-                    <td><code>[BlexStateAttribute] private T _foo;</code></td>
+                    <td><code>[BlexState] private T _foo;</code></td>
                     <td><code>public T Foo { get; set; }</code> - the setter routes through <code>SetState</code>; the field is included in both snapshot methods</td>
                 </tr>
                 <tr>
-                    <td><code>[BlexComputedAttribute] T ComputeFoo()</code></td>
+                    <td><code>[BlexComputed] T ComputeFoo()</code></td>
                     <td><code>public T Foo { get; }</code> plus <code>__FooValid</code> / <code>__FooValue</code>, and an entry in <code>InvalidateComputed()</code></td>
                 </tr>
                 <tr>
-                    <td><code>[BlexActionAttribute] void OnFoo(A a)</code></td>
+                    <td><code>[BlexAction] void OnFoo(A a)</code></td>
                     <td><code>public void Foo(A a)</code></td>
                 </tr>
                 <tr>
-                    <td><code>[BlexActionAttribute] Task OnFoo(A a)</code></td>
+                    <td><code>[BlexAction] Task OnFoo(A a)</code></td>
                     <td><code>public Task Foo(A a)</code></td>
                 </tr>
                 <tr>
-                    <td><code>[BlexEffectAttribute] Task OnFoo(A a)</code></td>
+                    <td><code>[BlexEffect] Task OnFoo(A a)</code></td>
                     <td>
                         <code>public Task Foo(A a)</code>,
                         <code>public bool FooIsLoading</code>,
@@ -86,7 +86,7 @@
                     </td>
                 </tr>
                 <tr>
-                    <td><code>[BlexEffectAttribute] Task OnFoo(A a, CancellationToken ct)</code></td>
+                    <td><code>[BlexEffect] Task OnFoo(A a, CancellationToken ct)</code></td>
                     <td>the above, plus <code>public void CancelFoo()</code> - and note the token is <em>not</em> on the public signature</td>
                 </tr>
             </tbody>
@@ -189,16 +189,16 @@
     ];
 
     private const string AttributeSummary = """
-        [BlexStoreAttribute(Name = "cart", Persist = true)]
+        [BlexStore(Name = "cart", Persist = true)]
         public partial class CartStore
         {
-            [BlexStateAttribute]    private IReadOnlyList<CartLine> _lines = [];
+            [BlexState]    private IReadOnlyList<CartLine> _lines = [];
 
-            [BlexComputedAttribute] private decimal ComputeTotal() => Lines.Sum(l => l.Total);
+            [BlexComputed] private decimal ComputeTotal() => Lines.Sum(l => l.Total);
 
-            [BlexActionAttribute]   private void OnAdd(CartLine line) => Lines = [.. Lines, line];
+            [BlexAction]   private void OnAdd(CartLine line) => Lines = [.. Lines, line];
 
-            [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Drop)]
+            [BlexEffect(Concurrency = BlexEffectConcurrency.Drop)]
             private async Task OnCheckout(CancellationToken ct) => await _api.CheckoutAsync(Lines, ct);
         }
         """;

@@ -283,7 +283,7 @@
         private void OnBlur() => History.Checkpoint("Edit title");
 
         // Or on a pause in typing, via a debounced effect:
-        [BlexEffectAttribute(DebounceMilliseconds = 500)]
+        [BlexEffect(DebounceMilliseconds = 500)]
         private async Task OnSettled()
         {
             await Task.CompletedTask;

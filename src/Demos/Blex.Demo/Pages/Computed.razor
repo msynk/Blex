@@ -8,9 +8,9 @@
     <h2>The convention</h2>
     <p>
         Mark a parameterless method named <code>ComputeXxx()</code> or <code>GetXxx()</code> with
-        <code>[BlexComputedAttribute]</code> and the generator emits a memoized public property <code>Xxx</code>.
+        <code>[BlexComputed]</code> and the generator emits a memoized public property <code>Xxx</code>.
         The value is calculated on first read, cached, and thrown away the moment any
-        <code>[BlexStateAttribute]</code> field on that store changes.
+        <code>[BlexState]</code> field on that store changes.
     </p>
 
     <CodeBlock Code="@Basic" />
@@ -106,7 +106,7 @@
 
     <h2>Computed values are not serialized</h2>
     <p>
-        Only <code>[BlexStateAttribute]</code> fields go into <code>SerializeState()</code>. Computed values are
+        Only <code>[BlexState]</code> fields go into <code>SerializeState()</code>. Computed values are
         derived, so they are recalculated after a restore rather than stored - which means a
         time-travel jump or a rehydrate can never leave a derived value out of sync with the state it
         came from.
@@ -144,18 +144,18 @@
     }
 
     private const string Basic = """
-        [BlexStoreAttribute(Name = "cart")]
+        [BlexStore(Name = "cart")]
         public partial class CartStore
         {
-            [BlexStateAttribute] private IReadOnlyList<CartLine> _lines = [];
-            [BlexStateAttribute] private decimal _discountRate;
+            [BlexState] private IReadOnlyList<CartLine> _lines = [];
+            [BlexState] private decimal _discountRate;
 
-            [BlexComputedAttribute] private decimal ComputeSubtotal() => Lines.Sum(l => l.Total);
+            [BlexComputed] private decimal ComputeSubtotal() => Lines.Sum(l => l.Total);
 
             // Computed values may build on other computed values.
-            [BlexComputedAttribute] private decimal ComputeTotal() => Math.Round(Subtotal * (1 - DiscountRate), 2);
+            [BlexComputed] private decimal ComputeTotal() => Math.Round(Subtotal * (1 - DiscountRate), 2);
 
-            [BlexComputedAttribute] private int ComputeItemCount() => Lines.Sum(l => l.Quantity);
+            [BlexComputed] private int ComputeItemCount() => Lines.Sum(l => l.Quantity);
         }
         """;
 
@@ -190,7 +190,7 @@
         // purely so this demo can show how often they really run.
         public int SubtotalEvaluations { get; private set; }
 
-        [BlexComputedAttribute]
+        [BlexComputed]
         private decimal ComputeSubtotal()
         {
             SubtotalEvaluations++;

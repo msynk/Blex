@@ -7,7 +7,7 @@
 <h1>Weather &mdash; cancellable effects</h1>
 
 <p>
-    <code>[BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]</code> gives this store's <code>Load</code>
+    <code>[BlexEffect(Concurrency = BlexEffectConcurrency.Latest)]</code> gives this store's <code>Load</code>
     "take latest" (switchMap) semantics: starting a new load cancels the one in flight. Because the
     effect method takes a trailing <code>CancellationToken</code>, the generator also emits a
     <code>CancelLoad()</code> method. <code>LoadIsLoading</code> and <code>LoadError</code> are

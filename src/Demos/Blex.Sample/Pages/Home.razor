@@ -11,17 +11,17 @@
 
 <p>This is the entire <code>CounterStore</code>. Everything else is generated:</p>
 
-<pre class="p-3 bg-light border rounded"><code>[BlexStoreAttribute(Name = "counter")]
+<pre class="p-3 bg-light border rounded"><code>[BlexStore(Name = "counter")]
 public partial class CounterStore
 {
-    [BlexStateAttribute] private int _count;
-    [BlexStateAttribute] private int _step = 1;
+    [BlexState] private int _count;
+    [BlexState] private int _step = 1;
 
-    [BlexComputedAttribute] private int ComputeDoubleCount() =&gt; Count * 2;
-    [BlexComputedAttribute] private bool ComputeIsEven() =&gt; Count % 2 == 0;
+    [BlexComputed] private int ComputeDoubleCount() =&gt; Count * 2;
+    [BlexComputed] private bool ComputeIsEven() =&gt; Count % 2 == 0;
 
-    [BlexActionAttribute] private void OnIncrement() =&gt; Count += Step;
-    [BlexActionAttribute] private void OnReset() { Count = 0; Step = 1; }
+    [BlexAction] private void OnIncrement() =&gt; Count += Step;
+    [BlexAction] private void OnReset() { Count = 0; Step = 1; }
 }</code></pre>
 
 <h3>Try time-travel</h3>

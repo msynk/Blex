@@ -7,8 +7,8 @@
 
     <h2>1. Write the store</h2>
     <p>
-        A store is a <code>partial class</code> marked <code>[BlexStoreAttribute]</code>. Fields marked
-        <code>[BlexStateAttribute]</code> become reactive properties; methods marked <code>[BlexActionAttribute]</code> become
+        A store is a <code>partial class</code> marked <code>[BlexStore]</code>. Fields marked
+        <code>[BlexState]</code> become reactive properties; methods marked <code>[BlexAction]</code> become
         public wrappers that record a single named action.
     </p>
 
@@ -19,10 +19,10 @@
         <table>
             <thead><tr><th>You write</th><th>You get</th><th>Rule</th></tr></thead>
             <tbody>
-                <tr><td><code>[BlexStateAttribute] private int _count;</code></td><td><code>public int Count { get; set; }</code></td><td>Strip a leading underscore, capitalize.</td></tr>
-                <tr><td><code>[BlexComputedAttribute] int ComputeDoubleCount()</code></td><td><code>public int DoubleCount { get; }</code></td><td>Strip <code>Compute</code> or <code>Get</code>.</td></tr>
-                <tr><td><code>[BlexActionAttribute] void OnIncrement()</code></td><td><code>public void Increment()</code></td><td>Strip the <code>On</code> prefix.</td></tr>
-                <tr><td><code>[BlexEffectAttribute] async Task OnLoad()</code></td><td><code>public Task Load()</code> + <code>LoadIsLoading</code> + <code>LoadError</code></td><td>Strip <code>On</code>, add the lifecycle.</td></tr>
+                <tr><td><code>[BlexState] private int _count;</code></td><td><code>public int Count { get; set; }</code></td><td>Strip a leading underscore, capitalize.</td></tr>
+                <tr><td><code>[BlexComputed] int ComputeDoubleCount()</code></td><td><code>public int DoubleCount { get; }</code></td><td>Strip <code>Compute</code> or <code>Get</code>.</td></tr>
+                <tr><td><code>[BlexAction] void OnIncrement()</code></td><td><code>public void Increment()</code></td><td>Strip the <code>On</code> prefix.</td></tr>
+                <tr><td><code>[BlexEffect] async Task OnLoad()</code></td><td><code>public Task Load()</code> + <code>LoadIsLoading</code> + <code>LoadError</code></td><td>Strip <code>On</code>, add the lifecycle.</td></tr>
             </tbody>
         </table>
     </div>
@@ -113,17 +113,17 @@
 
         namespace MyApp.Stores;
 
-        [BlexStoreAttribute(Name = "counter")]
+        [BlexStore(Name = "counter")]
         public partial class CounterStore
         {
-            [BlexStateAttribute] private int _count;
-            [BlexStateAttribute] private int _step = 1;
+            [BlexState] private int _count;
+            [BlexState] private int _step = 1;
 
-            [BlexComputedAttribute] private int  ComputeDoubleCount() => Count * 2;
-            [BlexComputedAttribute] private bool ComputeIsEven()      => Count % 2 == 0;
+            [BlexComputed] private int  ComputeDoubleCount() => Count * 2;
+            [BlexComputed] private bool ComputeIsEven()      => Count % 2 == 0;
 
-            [BlexActionAttribute] private void OnIncrement() => Count += Step;
-            [BlexActionAttribute] private void OnDecrement() => Count -= Step;
+            [BlexAction] private void OnIncrement() => Count += Step;
+            [BlexAction] private void OnDecrement() => Count -= Step;
         }
         """;
 

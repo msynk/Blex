@@ -7,15 +7,15 @@
 <DocPage Href="stores" Title="Stores & state"
          Lead="A store is a partial class that owns a slice of state. The generator turns its fields into reactive properties and gives it a JSON identity.">
 
-    <h2>The [BlexStoreAttribute] attribute</h2>
+    <h2>The [BlexStore] attribute</h2>
     <p>
-        Mark a <code>partial class</code> with <code>[BlexStoreAttribute]</code> and the generator makes it derive
+        Mark a <code>partial class</code> with <code>[BlexStore]</code> and the generator makes it derive
         from <code>BlexStoreBase</code>, emits the reactive members and implements the snapshot methods.
     </p>
 
     <CodeBlock Code="@StoreDecl" />
 
-    <ApiTable Title="[BlexStoreAttribute] properties" Rows="@StoreAttrRows" MemberHeader="Property" />
+    <ApiTable Title="[BlexStore] properties" Rows="@StoreAttrRows" MemberHeader="Property" />
 
     <Callout Kind="Callout.CalloutKind.Note" Title="Name is the slice key">
         <p style="margin-bottom:0">
@@ -42,9 +42,9 @@
 
     <CodeBlock Code="@DiSample" Title="A store with dependencies" />
 
-    <h2>[BlexStateAttribute] fields</h2>
+    <h2>[BlexState] fields</h2>
     <p>
-        Each <code>[BlexStateAttribute]</code> field becomes a public property whose setter runs through the
+        Each <code>[BlexState]</code> field becomes a public property whose setter runs through the
         dispatch pipeline: it compares, assigns, invalidates computed values, notifies subscribers
         and records the change for time-travel.
     </p>
@@ -64,7 +64,7 @@
         </table>
     </div>
     <p>
-        A <code>[BlexStateAttribute]</code> field must be a writable instance field: <code>static</code>,
+        A <code>[BlexState]</code> field must be a writable instance field: <code>static</code>,
         <code>const</code> and <code>readonly</code> are rejected with <code>BLEX008</code>.
     </p>
 
@@ -135,7 +135,7 @@
         <p style="margin-bottom:0">
             On restore, a property that is <em>present</em> but JSON-null resets the field to
             <code>default</code>; a <em>missing</em> property leaves the current value untouched.
-            That is what lets you add a new <code>[BlexStateAttribute]</code> field without invalidating payloads
+            That is what lets you add a new <code>[BlexState]</code> field without invalidating payloads
             saved by an older build.
         </p>
     </Callout>
@@ -208,7 +208,7 @@
     ];
 
     private const string StoreDecl = """
-        [BlexStoreAttribute(Name = "counter", Persist = true)]
+        [BlexStore(Name = "counter", Persist = true)]
         public partial class CounterStore
         {
             // ...
@@ -216,7 +216,7 @@
         """;
 
     private const string DiSample = """
-        [BlexStoreAttribute(Name = "weather")]
+        [BlexStore(Name = "weather")]
         public partial class WeatherStore
         {
             private readonly HttpClient _http;
@@ -224,34 +224,34 @@
             // Constructor injection works exactly as it does for any other scoped service.
             public WeatherStore(HttpClient http) => _http = http;
 
-            [BlexStateAttribute] private Forecast[]? _forecasts;
+            [BlexState] private Forecast[]? _forecasts;
 
-            [BlexEffectAttribute]
+            [BlexEffect]
             private async Task OnLoad(CancellationToken ct)
                 => Forecasts = await _http.GetFromJsonAsync<Forecast[]>("forecasts.json", ct);
         }
         """;
 
     private const string StateSample = """
-        [BlexStateAttribute] private int _count;                       // -> public int Count
-        [BlexStateAttribute] private string _name = "";                // -> public string Name
-        [BlexStateAttribute] private IReadOnlyList<Todo> _todos = [];   // -> public IReadOnlyList<Todo> Todos
-        [BlexStateAttribute] private Filter _filter = Filter.All;       // -> public Filter Filter (enum, stored as a string)
+        [BlexState] private int _count;                       // -> public int Count
+        [BlexState] private string _name = "";                // -> public string Name
+        [BlexState] private IReadOnlyList<Todo> _todos = [];   // -> public IReadOnlyList<Todo> Todos
+        [BlexState] private Filter _filter = Filter.All;       // -> public Filter Filter (enum, stored as a string)
         """;
 
     private const string EqualitySource = """
-        [BlexStoreAttribute(Name = "equalityDemo")]
+        [BlexStore(Name = "equalityDemo")]
         public partial class EqualityDemoStore
         {
-            [BlexStateAttribute] private List<string> _items = ["alpha"];
+            [BlexState] private List<string> _items = ["alpha"];
 
-            [BlexComputedAttribute] private int ComputeCount() => Items.Count;
+            [BlexComputed] private int ComputeCount() => Items.Count;
 
             // The trap: contents change, the reference does not -- nothing notifies.
-            [BlexActionAttribute] private void OnMutateInPlace() => Items.Add($"item {_next++}");
+            [BlexAction] private void OnMutateInPlace() => Items.Add($"item {_next++}");
 
             // The fix: a new instance, so the reference differs and change detection fires.
-            [BlexActionAttribute] private void OnAssignNew() => Items = [.. Items, $"item {_next++}"];
+            [BlexAction] private void OnAssignNew() => Items = [.. Items, $"item {_next++}"];
         }
         """;
 

@@ -136,8 +136,8 @@
     <Callout Kind="Callout.CalloutKind.Warning" Title="Errors inside an action body are not isolated">
         <p style="margin-bottom:0">
             This is about the <em>observers</em> of an action. An exception thrown by your own
-            <code>[BlexActionAttribute]</code> method body propagates to the caller as usual - only
-            <code>[BlexEffectAttribute]</code> bodies capture their exception, into the generated
+            <code>[BlexAction]</code> method body propagates to the caller as usual - only
+            <code>[BlexEffect]</code> bodies capture their exception, into the generated
             <code>XxxError</code> property.
         </p>
     </Callout>
