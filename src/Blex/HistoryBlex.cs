@@ -18,19 +18,40 @@ public sealed class HistoryBlex : IDisposable
     private readonly ManagerBlex _manager;
     private readonly List<EntryBlex> _undo = [];
     private readonly List<EntryBlex> _redo = [];
+    private readonly Func<ActionContextBlex, bool>? _filter;
     private JsonObject? _present;
+
+    // The state as of the last undo boundary (a recorded action, a checkpoint, a restore). It
+    // trails _present across filtered actions, which advance the present without creating a step;
+    // Checkpoint needs it to know whether anything has actually happened since the last boundary,
+    // and which state that boundary should push.
+    private JsonObject? _boundary;
     private string? _presentLabel;
     private bool _started;
     private bool _restoring;
 
     /// <summary>Creates a history bound to a manager. Set <paramref name="maxEntries"/> to cap memory.</summary>
-    public HistoryBlex(ManagerBlex manager, int maxEntries = 100)
+    /// <param name="manager">The manager whose actions are recorded.</param>
+    /// <param name="maxEntries">Maximum number of undo entries retained; older entries are discarded.</param>
+    /// <param name="filter">
+    /// Optional predicate deciding which actions get their own undo step (redux-undo's
+    /// <c>filter</c>). Return <c>false</c> to keep an action out of the history: its state change
+    /// still applies and still moves the present forward, it simply does not become a separate
+    /// undo step, so the next <see cref="Undo"/> reverts it together with the recorded action
+    /// before it. Use it to keep keystroke-level noise (<c>Set Query</c>, cursor moves, telemetry
+    /// stores) out of an undo stack the user thinks in terms of.
+    /// </param>
+    /// <example><code>
+    /// new HistoryBlex(manager, filter: ctx => !ctx.ActionName.StartsWith("Set "));
+    /// </code></example>
+    public HistoryBlex(ManagerBlex manager, int maxEntries = 100, Func<ActionContextBlex, bool>? filter = null)
     {
         ArgumentNullException.ThrowIfNull(manager);
         if (maxEntries < 1)
             throw new ArgumentOutOfRangeException(nameof(maxEntries));
         _manager = manager;
         MaxEntries = maxEntries;
+        _filter = filter;
     }
 
     /// <summary>Maximum number of undo entries retained; older entries are discarded.</summary>
@@ -76,7 +97,7 @@ public sealed class HistoryBlex : IDisposable
         if (_started)
             return;
         _started = true;
-        _present = _manager.CaptureGlobalState();
+        _present = _boundary = _manager.CaptureGlobalState();
         _presentLabel = null;
         _manager.ActionDispatched += OnAction;
         _manager.StateRestored += OnExternalRestore;
@@ -92,7 +113,7 @@ public sealed class HistoryBlex : IDisposable
             // An external restore (DevTools time-travel, manual RestoreGlobalState) changed the
             // state without an action. Refresh the present snapshot so the next Undo diffs from
             // what the user actually sees rather than a stale pre-jump state.
-            _present = _manager.CaptureGlobalState();
+            _present = _boundary = _manager.CaptureGlobalState();
             _presentLabel = null;
             RaiseChanged();
         }
@@ -111,15 +132,25 @@ public sealed class HistoryBlex : IDisposable
 
         try
         {
-            if (_present is not null)
+            var record = Allows(context);
+            if (record && _present is not null)
             {
                 _undo.Add(new EntryBlex(_present, _presentLabel));
                 if (_undo.Count > MaxEntries)
                     _undo.RemoveAt(0);
             }
 
+            // The present always advances -- a filtered action changed the state just as much as a
+            // recorded one, and leaving a stale present behind would make the next Undo restore a
+            // snapshot the user never saw. Only the undo *step* is skipped. The label is left alone
+            // for the same reason: it names the boundary the next Undo actually returns to.
             _present = context.GlobalState;
-            _presentLabel = context.QualifiedName;
+            if (record)
+            {
+                _presentLabel = context.QualifiedName;
+                _boundary = _present;
+            }
+
             _redo.Clear();
             RaiseChanged();
         }
@@ -129,6 +160,71 @@ public sealed class HistoryBlex : IDisposable
             // for observers registered after history (e.g. persistence).
             _manager.ReportError("history", ex, context.QualifiedName);
         }
+    }
+
+    /// <summary>
+    /// Whether the filter admits this action into the history. A throwing filter fails open (the
+    /// action is recorded): silently dropping undo steps would be far harder to notice than an
+    /// extra one, and the failure is reported either way.
+    /// </summary>
+    private bool Allows(ActionContextBlex context)
+    {
+        if (_filter is null)
+            return true;
+
+        try
+        {
+            return _filter(context);
+        }
+        catch (Exception ex)
+        {
+            _manager.ReportError("history", ex, $"history filter for '{context.QualifiedName}'");
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Commits the current state as an undo boundary, as if an action named
+    /// <paramref name="label"/> had just been recorded. Use it together with a filter: the filter
+    /// keeps keystroke-level actions out of the stack, and this marks the points the user would
+    /// actually want to step back to (a pause in typing, a field losing focus, a wizard step).
+    /// </summary>
+    /// <param name="label">
+    /// The label <see cref="NextUndoLabel"/> reports for this boundary. Defaults to
+    /// <c>"Checkpoint"</c>.
+    /// </param>
+    /// <remarks>
+    /// Without this, a filter that drops every keystroke leaves a whole edit with no boundary of its
+    /// own, so the next <see cref="Undo"/> discards the edit together with the recorded action
+    /// before it. Consecutive checkpoints with nothing in between are collapsed: a debounced
+    /// "user stopped typing" timer can call this freely without growing the stack while the state
+    /// sits still. Like <see cref="Clear"/>, it works whether or not recording has
+    /// <see cref="Start">started</see>.
+    /// </remarks>
+    public void Checkpoint(string? label = null)
+    {
+        _present = _manager.CaptureGlobalState();
+
+        // Nothing moved since the last boundary -- a checkpoint here would be an undo step that
+        // reverts to the state it was taken from. Compared as text rather than with
+        // JsonNode.DeepEquals, which only exists from .NET 9; both trees come from the same
+        // CaptureGlobalState, so their property order matches.
+        if (_boundary is not null && _boundary.ToJsonString() == _present.ToJsonString())
+            return;
+
+        if (_boundary is not null)
+        {
+            // The boundary, not the present: everything between them is the work this checkpoint
+            // is turning into one undoable step.
+            _undo.Add(new EntryBlex(_boundary, _presentLabel));
+            if (_undo.Count > MaxEntries)
+                _undo.RemoveAt(0);
+        }
+
+        _boundary = _present;
+        _presentLabel = label ?? "Checkpoint";
+        _redo.Clear();
+        RaiseChanged();
     }
 
     /// <summary>Reverts to the previous state. No-op when <see cref="CanUndo"/> is false.</summary>
@@ -142,7 +238,7 @@ public sealed class HistoryBlex : IDisposable
 
         var entry = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
-        _present = entry.State;
+        _present = _boundary = entry.State;
         _presentLabel = entry.Label;
         Restore(entry.State);
         RaiseChanged();
@@ -159,7 +255,7 @@ public sealed class HistoryBlex : IDisposable
 
         var entry = _redo[^1];
         _redo.RemoveAt(_redo.Count - 1);
-        _present = entry.State;
+        _present = _boundary = entry.State;
         _presentLabel = entry.Label;
         Restore(entry.State);
         RaiseChanged();
@@ -170,7 +266,7 @@ public sealed class HistoryBlex : IDisposable
     {
         _undo.Clear();
         _redo.Clear();
-        _present = _manager.CaptureGlobalState();
+        _present = _boundary = _manager.CaptureGlobalState();
         _presentLabel = null;
         RaiseChanged();
     }

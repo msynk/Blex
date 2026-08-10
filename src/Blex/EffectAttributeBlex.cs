@@ -24,4 +24,31 @@ public sealed class EffectAttributeBlex : Attribute
 
     /// <summary>How overlapping invocations of this effect are handled. Defaults to <see cref="EffectConcurrencyBlex.Parallel"/>.</summary>
     public EffectConcurrencyBlex Concurrency { get; set; }
+
+    /// <summary>
+    /// Waits for this quiet period (in milliseconds) before running the effect body, restarting the
+    /// wait on every new invocation -- the search-as-you-type gate. <c>0</c> (the default) disables
+    /// debouncing. Only the final invocation of a burst runs; the ones it superseded return without
+    /// having touched anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The wait happens before <em>any</em> observable side effect, so a superseded invocation
+    /// never flips <c>XxxIsLoading</c>, never clears <c>XxxError</c>, is never offered to middleware
+    /// and records no action. <c>XxxIsLoading</c> therefore turns <c>true</c> when the body actually
+    /// starts, not while the gate is waiting -- bind a spinner to it and it will not flicker once
+    /// per keystroke.
+    /// </para>
+    /// <para>
+    /// Debouncing composes with <see cref="Concurrency"/>, which still governs invocations that
+    /// survive the gate: pair it with <see cref="EffectConcurrencyBlex.Latest"/> (and a trailing
+    /// <see cref="System.Threading.CancellationToken"/> parameter) so a request already in flight is
+    /// also cancelled when the next one gets through.
+    /// </para>
+    /// </remarks>
+    /// <example><code>
+    /// [EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+    /// private async Task OnSearch(string query, CancellationToken ct) => Results = await _api.SearchAsync(query, ct);
+    /// </code></example>
+    public int DebounceMilliseconds { get; set; }
 }

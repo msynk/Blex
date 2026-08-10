@@ -142,6 +142,18 @@ using var log = store.Subscribe(() => store.Count,
     (prev, curr) => Console.WriteLine($"{prev} -> {curr}"), fireImmediately: true);
 ```
 
+`ManagerBlex` carries the same pair of overloads for a projection that spans stores, so a
+cross-store derived value doesn't have to be recomputed on every action of every store:
+
+```csharp
+using var sub = manager.Subscribe(
+    () => cart.Total > profile.CreditLimit,
+    overLimit => _banner = overLimit ? "Over your limit" : null);
+```
+
+Keep a manager-level projection cheap - it runs after every action in the application, so read
+already-memoized `[ComputedAttributeBlex]` properties rather than recomputing over collections.
+
 ## Effects (async with managed loading/error)
 
 `[EffectAttributeBlex]` marks an async method (returning `Task`/`ValueTask`) whose loading and error lifecycle is
@@ -188,6 +200,22 @@ normal outcome and never populates `Error`. A *foreign* `OperationCanceledExcept
 `HttpClient` timeout, or any cancellation when the effect has no token parameter - is a real
 failure and is recorded in `Error`.
 
+`Latest` stops a stale response from landing, but it still sends a request per keystroke.
+`DebounceMilliseconds` waits for a quiet period first, so only the invocation the user actually
+paused on runs at all - the two compose into the complete type-ahead recipe:
+
+```csharp
+[EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+private async Task OnTypeAhead(string query, CancellationToken ct)
+    => Results = await _api.SearchAsync(query, ct);
+```
+
+The wait happens before anything observable, which is the point of generating it rather than
+hand-rolling it: a superseded invocation never flips `IsLoading`, never clears `Error`, is never
+offered to middleware and records no action. A spinner bound to `IsLoading` therefore does not blink
+once per keystroke, and DevTools does not fill up with searches that never happened. The gate is per
+effect, not per argument.
+
 Every invocation is offered to the middleware/veto pipeline independently, including one started
 while another async action of the same store is still awaiting. A vetoed invocation leaves no
 trace: it never flips `IsLoading`, never clears `Error`, never supersedes a `Latest` run in flight
@@ -217,15 +245,34 @@ public partial class TodoStore
 
 `EntityStateBlex` exposes `Ids`, `Entities`, `All`, `Count`, `Contains(id)` and `Find(id)`, and
 round-trips through JSON for snapshots and persistence. Every operation that changes nothing -
-removing an absent id, upserting an empty sequence, an updater that returns an equal entity -
-returns the *same* instance, so it raises no notification and records no action. The adapter also offers `AddMany`,
-`UpsertMany`, `UpdateMany`, `Map` (transform every entity), `RemoveMany`, `RemoveAll` and `SetAll`,
-plus an optional sort comparer that keeps `Ids` ordered after every operation:
+removing an absent id, upserting an empty sequence, an updater that returns an equal entity,
+`SetAll` with an unchanged payload - returns the *same* instance, so it raises no notification and
+records no action. Polling a list endpoint is therefore free while the data is unchanged. The
+adapter also offers `AddMany`, `UpsertMany`, `UpdateMany`, `Map` (transform every entity),
+`SetOne`/`SetMany`, `RemoveMany`, `RemoveAll` and `SetAll`, plus an optional sort comparer that
+keeps `Ids` ordered after every operation:
 
 ```csharp
 private static readonly EntityAdapterBlex<Todo, int> Adapter =
     new(t => t.Id, Comparer<Todo>.Create((a, b) => a.DueDate.CompareTo(b.DueDate)));
 ```
+
+`SetOne`/`SetMany` replace an entity only if its id is already present - unlike `UpsertOne`, they
+never insert. That is what you want for a late save response that must not resurrect a row the user
+deleted while it was in flight:
+
+```csharp
+[EffectAttributeBlex]
+private async Task OnSave(Todo todo)
+{
+    var saved = await _api.PutAsync(todo);
+    Todos = Adapter.SetOne(Todos, saved);   // applied only if the id is still there
+}
+```
+
+A payload restored from storage is reconciled rather than trusted: ids with no matching entity are
+dropped, entities missing from the id list are appended, and duplicate ids are collapsed - so a
+hand-edited or partially written payload cannot throw mid-render.
 
 ## Persistence
 
@@ -253,6 +300,9 @@ Persistence is production-hardened:
 
 - **Corrupt data never breaks startup** - an unreadable payload is reported through `OnError`,
   discarded, and removed from storage.
+- **A failed write is reported, not swallowed** - quota exhaustion, private mode or storage being
+  disabled reaches `OnError` with source `"persistence"`, so the app can tell the user their
+  changes are not being saved instead of pretending they were.
 - **Debounce** - `options.DebounceInterval = TimeSpan.FromMilliseconds(300)` coalesces bursts of
   actions into one write (flushed on dispose, or on demand via `persistor.FlushAsync()`).
 - **Versioning & migrations** - bump `options.Version` when a persisted store's shape changes and
@@ -275,6 +325,40 @@ builder.Services.AddBlexLocalStoragePersistence(options =>
   storage, so a reload never resurrects the pre-restore state.
 - **Ordered writes** - saves are serialized in dispatch order; a stale payload can't overwrite a
   newer one.
+- **Partial persistence** - `options.Partialize` projects each snapshot on its way to storage, so
+  transient fields (a search box's text, a cached response) never get written. Keys you omit come
+  back as their declared defaults rather than being wiped. Return `null` to skip that store's write
+  entirely.
+- **Rehydration hooks** - `options.OnRehydrated` fires once per persistent store with the slice that
+  was applied, or `null` when nothing was stored - which is how you tell a returning user from a
+  first visit.
+- **Deferred hydration** - `options.SkipHydration = true` starts saving without restoring; call
+  `persistor.RehydrateAsync()` once sign-in resolves, or once the user confirms.
+- **Cross-tab sync** - `options.SyncAcrossTabs = true` applies state written by another tab as soon
+  as it lands. Without it two open tabs quietly fight: each saves after every action, so whichever
+  acted last wins and the other's changes vanish on its next reload. Incoming state is applied as a
+  restore (no time-travel entry, and never written straight back, which would bounce it between
+  tabs) and is migrated exactly as at startup. `options.OnExternalChange` reports it. Backed by the
+  browser's `storage` event for `localStorage`; any storage can opt in by implementing
+  `IExternalStorageChangeBlex`.
+
+```csharp
+builder.Services.AddBlexLocalStoragePersistence(options =>
+{
+    options.Partialize = (storeName, state) =>
+    {
+        if (storeName == "search")
+            state.Remove("Query");     // per-visit, never persisted
+
+        return state;                  // return null to skip this store's write
+    };
+
+    options.OnRehydrated = (storeName, state) =>
+    {
+        if (state is null) _telemetry.FirstVisit();
+    };
+});
+```
 
 ## Cross-store coordination
 
@@ -304,9 +388,11 @@ builder.Services.AddBlex(options =>
 they go to `Console.Error`. Isolation is per handler and covers the whole observer surface:
 `StateChanged`/`PropertyChanged` subscribers (including selector subscriptions and
 `ComponentBaseBlex`), `manager.Subscribe(...)` handlers *and* their filters, raw
-`ActionDispatched`/`StateRestored` handlers, `HistoryBlex.Changed`, middleware, persistence writes,
-restores and sanitizers. One component throwing while it re-renders can never starve the
-subscribers behind it, nor the persistence and undo/redo observers that run after them.
+`ActionDispatched`/`StateRestored` handlers, `HistoryBlex.Changed` and its filter, middleware,
+persistence writes, restores, sanitizers, per-store `ResetAll` failures, and the prerender-to-
+interactive handoff. One component throwing while it re-renders can never starve the subscribers
+behind it, nor the persistence and undo/redo observers that run after them - and a store whose
+prerendered slice fails to apply costs a second render, not a failed startup.
 
 Store names key the global state tree, the DevTools slices *and* the persistence storage keys, so
 they must be unique. Registering two stores under one name is reported through `OnError` rather
@@ -331,6 +417,47 @@ builder.Services.AddBlexHistory();   // <ProviderBlex> starts recording automati
 counter/Increment"); `UndoCount`/`RedoCount` expose stack depths. When persistence is enabled,
 undo/redo writes the restored state back to storage.
 
+By default every action earns its own undo step, which is rarely what a user means once a text box
+is involved - typing "hello" into a bound property would record five steps. Pass a filter
+(redux-undo's `filter`) to decide what counts:
+
+```csharp
+// Direct property assignments record as "Set X" - typically one per keystroke.
+builder.Services.AddBlexHistory(filter: ctx => !ctx.ActionName.StartsWith("Set "));
+```
+
+A filtered action still applies and still moves the present forward; it simply doesn't become a
+separate step, so the next undo reverts it together with the recorded action before it. Undo
+therefore never lands on a state the user never saw. A filter that throws fails open - the action is
+recorded anyway and the failure is reported through `OnError`.
+
+A filter alone leaves the filtered work with no boundary of its own, so the next recorded action
+swallows it. `History.Checkpoint(label)` commits the current state as an undo step on demand - call
+it where the user expects a boundary (a pause in typing, a field losing focus, a wizard step).
+Consecutive checkpoints with nothing in between collapse into one, so a debounced "user stopped
+typing" timer can call it freely.
+
+```csharp
+private void OnBlur() => History.Checkpoint("Edit title");
+```
+
+## Resetting
+
+`store.ResetState()` returns one store to the state it had when it was registered;
+`manager.ResetAll()` does it across every registered store - the usual sign-out move. Each store
+resets as its own normal, vetoable, observable, persisted and undoable `ResetState` action, so
+middleware can exempt individual stores and DevTools shows one entry per store. A store already
+holding its initial state is skipped entirely: resetting an untouched form notifies nobody, writes
+nothing and adds no undo step.
+
+```csharp
+manager.ResetAll();
+
+// Keep one store out of it:
+builder.Services.AddBlex(options => options.UseFilter(
+    ctx => !(ctx.Store.Name == "theme" && ctx.ActionName == "ResetState")));
+```
+
 ## Testing
 
 `Blex.Testing` provides a zero-setup harness that records dispatched actions:
@@ -350,6 +477,18 @@ var load = harness.Store.LoadUser(42);
 await harness.Store.WaitForAsync(() => !harness.Store.LoadUserIsLoading);
 ```
 
+A store is rarely alone in production, so the harness can bring the pipeline with it - test the
+store together with the guard rails that wrap it:
+
+```csharp
+using var harness = TestHarnessBlex.WithFilter<CounterStore>(_ => false);
+harness.Store.Increment();
+Assert.Equal(0, harness.Store.Count);   // vetoed
+Assert.Empty(harness.Log.Actions);
+
+using var audited = TestHarnessBlex.WithMiddleware<CounterStore>(new AuditMiddleware());
+```
+
 ## Compile-time diagnostics
 
 The generator validates store shapes and fails fast with precise errors instead of emitting broken
@@ -360,7 +499,10 @@ effects · `BLEX008` static/readonly members · `BLEX009` `Latest` effect withou
 `CancellationToken` (warning) · `BLEX010` `async void` actions · `BLEX011` discarded action
 return values (warning) · `BLEX012` state field/property name conflicts · `BLEX013` by-ref
 parameters · `BLEX014` generic action/effect methods · `BLEX015` record stores ·
-`BLEX016` conflicting base class · `BLEX017` `void` computed methods.
+`BLEX016` conflicting base class · `BLEX017` `void` computed methods · `BLEX018` a Blex member
+attribute used outside a `[StoreAttributeBlex]` class (warning) - the one mistake that otherwise
+compiles cleanly and silently generates nothing at all · `BLEX019` negative
+`DebounceMilliseconds`.
 
 ## Time-travel debugging
 
@@ -384,6 +526,10 @@ builder.Services.AddBlex(options =>
     options.DevToolsActionSanitizer = label => label;     // or rewrite action labels
 });
 ```
+
+`RedactDevToolsKeys` is additive and composes: calling it again *widens* the redaction set rather
+than replacing it, and it wraps any `DevToolsStateSanitizer` assigned before it. Register redaction
+last - assigning `DevToolsStateSanitizer` afterwards replaces it outright.
 
 ## .NET MAUI
 

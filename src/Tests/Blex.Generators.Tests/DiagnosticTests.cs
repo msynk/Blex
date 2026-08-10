@@ -260,4 +260,110 @@ public class DiagnosticTests
         Assert.Empty(result.CompileErrors());
         Assert.Contains("public int Double", result.SingleGenerated);
     }
+
+    [Fact]
+    public void StateFieldOutsideAStore_ReportsBLEX018()
+    {
+        // Without the [StoreAttributeBlex] the whole file compiles cleanly and generates nothing,
+        // which is indistinguishable from a broken generator. Say so.
+        var result = GeneratorTestHelper.Run(Usings + """
+            public partial class NotAStore { [StateAttributeBlex] private int _x; }
+            """);
+        Assert.True(result.HasDiagnostic("BLEX018"));
+    }
+
+    [Fact]
+    public void ActionComputedAndEffectOutsideAStore_ReportBLEX018()
+    {
+        var result = GeneratorTestHelper.Run(Usings + """
+            public partial class NotAStore
+            {
+                [ComputedAttributeBlex] private int ComputeX() => 1;
+                [ActionAttributeBlex] private void OnBump() { }
+                [EffectAttributeBlex] private Task OnLoad() => Task.CompletedTask;
+            }
+            """);
+        Assert.True(result.HasDiagnostic("BLEX018"));
+        Assert.Equal(3, result.GeneratorDiagnostics.Count(d => d.Id == "BLEX018"));
+    }
+
+    [Fact]
+    public void MembersInsideAStore_DoNotReportBLEX018()
+    {
+        var result = GeneratorTestHelper.Run(Usings + """
+            [StoreAttributeBlex] public partial class S
+            {
+                [StateAttributeBlex] private int _x;
+                [ComputedAttributeBlex] private int ComputeDouble() => X * 2;
+                [ActionAttributeBlex] private void OnBump() => X++;
+                [EffectAttributeBlex] private Task OnLoad() => Task.CompletedTask;
+            }
+            """);
+        Assert.False(result.HasDiagnostic("BLEX018"));
+        Assert.Empty(result.CompileErrors());
+    }
+
+    [Fact]
+    public void NegativeDebounce_ReportsBLEX019()
+    {
+        // Task.Delay throws on a negative delay, at runtime, from inside generated code.
+        var result = GeneratorTestHelper.Run(Usings + """
+            [StoreAttributeBlex] public partial class S
+            {
+                [StateAttributeBlex] private int _x;
+                [EffectAttributeBlex(DebounceMilliseconds = -1)] private Task OnLoad() => Task.CompletedTask;
+            }
+            """);
+        Assert.True(result.HasDiagnostic("BLEX019"));
+    }
+
+    [Fact]
+    public void ZeroDebounce_IsTheDefaultAndReportsNothing()
+    {
+        var result = GeneratorTestHelper.Run(Usings + """
+            [StoreAttributeBlex] public partial class S
+            {
+                [StateAttributeBlex] private int _x;
+                [EffectAttributeBlex(DebounceMilliseconds = 0)] private Task OnLoad() => Task.CompletedTask;
+                [EffectAttributeBlex] private Task OnOther() => Task.CompletedTask;
+            }
+            """);
+        Assert.False(result.HasDiagnostic("BLEX019"));
+        Assert.Empty(result.CompileErrors());
+        Assert.DoesNotContain("Task.Delay", result.SingleGenerated);
+    }
+
+    [Fact]
+    public void PositiveDebounce_EmitsTheGateBeforeAnythingObservable()
+    {
+        var result = GeneratorTestHelper.Run(Usings + """
+            [StoreAttributeBlex] public partial class S
+            {
+                [StateAttributeBlex] private int _x;
+                [EffectAttributeBlex(DebounceMilliseconds = 250)] private Task OnSearch(string q) => Task.CompletedTask;
+            }
+            """);
+
+        Assert.Empty(result.CompileErrors());
+        var generated = result.SingleGenerated;
+        Assert.Contains("Task.Delay(250", generated);
+
+        // The gate must precede BeginAction: a superseded invocation is never offered to
+        // middleware and records nothing.
+        Assert.True(generated.IndexOf("Task.Delay(250") < generated.IndexOf("BeginAction(\"Search\""));
+    }
+
+    [Fact]
+    public void MemberInATypeNestedInsideAStore_ReportsBLEX018()
+    {
+        // The nested type is not itself a store, so nothing is generated for its members either.
+        var result = GeneratorTestHelper.Run(Usings + """
+            [StoreAttributeBlex] public partial class S
+            {
+                [StateAttributeBlex] private int _x;
+                public class Inner { [StateAttributeBlex] private int _y; }
+            }
+            """);
+        Assert.True(result.HasDiagnostic("BLEX018"));
+    }
 }

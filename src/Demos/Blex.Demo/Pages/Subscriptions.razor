@@ -87,7 +87,26 @@
         Pass <code>fireImmediately: true</code> to invoke the callback once at subscription time with
         the current value, so an observer does not have to seed itself. With the two-argument
         overload, <code>previous</code> and <code>current</code> are both the value at subscription.
+        If that first call throws, the subscription is detached before the exception surfaces - the
+        caller never received a token, so a handler left attached would be unstoppable.
     </p>
+
+    <h3>Across stores</h3>
+    <p>
+        <code>ManagerBlex</code> carries the same pair of overloads for a projection that spans
+        stores. Without it, a value derived from two stores has to be recomputed on every action of
+        every store - the cross-store equivalent of re-rendering the whole app on any change.
+    </p>
+    <CodeBlock Code="@ManagerSelector" Title="One callback, two stores" />
+
+    <Callout Kind="Callout.CalloutKind.Gotcha" Title="A manager selector runs after every action">
+        <p style="margin-bottom:0">
+            The store-level overload only runs when <em>that</em> store changes; the manager-level one
+            runs after every action in the application. Keep the projection cheap - read
+            already-memoized <a href="computed"><code>[ComputedAttributeBlex]</code></a> properties
+            rather than recomputing over collections inside it.
+        </p>
+    </Callout>
 
     <h2>Owning other subscriptions</h2>
     <p>
@@ -196,6 +215,22 @@
             () => store.SelectedIds,
             ids => Refresh(ids),
             comparer: new SetEqualityComparer<int>());
+        """;
+
+    private const string ManagerSelector = """
+        @inject ManagerBlex Manager
+        @inject CartStore Cart
+        @inject ProfileStore Profile
+
+        protected override void OnInitialized()
+            => OwnsSubscription(Manager.Subscribe(
+                   () => Cart.Total > Profile.CreditLimit,     // spans two stores
+                   overLimit => _banner = overLimit ? "Over your limit" : null));
+
+        // The (previous, current) overload and a custom comparer work the same as on a store:
+        Manager.Subscribe(
+            () => Cart.Total,
+            (previous, current) => _analytics.CartValueChanged(previous, current));
         """;
 
     private const string Owns = """

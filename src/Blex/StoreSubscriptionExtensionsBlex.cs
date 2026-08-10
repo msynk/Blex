@@ -70,8 +70,23 @@ public static class StoreSubscriptionExtensionsBlex
             _comparer = comparer;
             _last = selector();
             store.StateChanged += OnStoreChanged;
-            if (fireImmediately)
+
+            if (!fireImmediately)
+                return;
+
+            try
+            {
                 onChanged(_last, _last);
+            }
+            catch
+            {
+                // The caller never receives the token when the constructor throws, so the handler
+                // would stay attached to the store for the rest of its life -- a leak that also
+                // keeps firing a callback its owner believes it never registered. Detach, then let
+                // the exception surface at the call site where it belongs.
+                Dispose();
+                throw;
+            }
         }
 
         private void OnStoreChanged()

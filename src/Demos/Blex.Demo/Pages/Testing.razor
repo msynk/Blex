@@ -58,10 +58,17 @@
 
     <h2>Testing middleware</h2>
     <p>
-        Middleware needs a manager, not a harness. Construct one with your middleware and register
-        the store yourself.
+        A store is rarely alone in production - a veto filter, an audit logger or a metrics recorder
+        usually wraps it, and those guard rails deserve tests too.
+        <code>TestHarnessBlex.WithFilter</code> and <code>WithMiddleware</code> give you the same
+        zero-setup harness with the pipeline attached.
     </p>
     <CodeBlock Code="@MiddlewareTest" />
+
+    <p>
+        Reach for a hand-built <code>ManagerBlex</code> only when the test genuinely needs more than
+        one store, or a manager configured before any store is registered.
+    </p>
 
     <h2>Testing persistence</h2>
     <p>
@@ -106,6 +113,8 @@
     [
         new("TestHarnessBlex.For&lt;TStore&gt;()", "Creates a harness for a store with a parameterless constructor."),
         new("TestHarnessBlex.For(store)", "Creates a harness around an already-constructed store - use this when the store has dependencies."),
+        new("TestHarnessBlex.WithFilter&lt;TStore&gt;(predicate)", "A harness whose manager vetoes any action the predicate rejects. The shorthand for testing a store together with its guard rails."),
+        new("TestHarnessBlex.WithMiddleware&lt;TStore&gt;(…)", "A harness whose manager runs the given middleware. Also accepts an already-constructed store."),
         new("TStore Store", "The store under test."),
         new("ManagerBlex Manager", "The manager backing the harness. Use it to add middleware assertions or extra subscriptions."),
         new("ActionLogBlex Log", "Records every dispatch."),
@@ -274,16 +283,34 @@
         [Fact]
         public void A_filter_vetoes_the_action()
         {
-            var readOnly = true;
-            var manager = new ManagerBlex([new FilterMiddlewareBlex(_ => !readOnly)]);
-            var store = new CounterStore();
-            manager.Register(store);
+            using var harness = TestHarnessBlex.WithFilter<CounterStore>(_ => false);
+
+            harness.Store.Increment();
+
+            Assert.Equal(0, harness.Store.Count);   // the mutation never ran
+            Assert.Empty(harness.Log.Actions);      // and nothing was recorded
+        }
+
+        [Fact]
+        public void The_audit_middleware_sees_every_action()
+        {
+            var audit = new AuditMiddleware();
+            using var harness = TestHarnessBlex.WithMiddleware<CounterStore>(audit);
+
+            harness.Store.Increment();
+
+            Assert.Equal(["counter/Increment"], audit.Entries);
+        }
+
+        // More than one store, or a manager configured up front: build it yourself.
+        [Fact]
+        public void Two_stores_share_one_filter()
+        {
+            var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx => ctx.Store.Name != "cart")]);
+            manager.Register(new CartStore());
+            manager.Register(new ProfileStore());
             using var log = manager.RecordActions();
-
-            store.Increment();
-
-            Assert.Equal(0, store.Count);   // the mutation never ran
-            Assert.Empty(log.Actions);      // and nothing was recorded
+            ...
         }
         """;
 

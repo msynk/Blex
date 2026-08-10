@@ -84,6 +84,52 @@ public class SanitizerTests
     }
 
     [Fact]
+    public void RedactDevToolsKeys_CalledTwice_WidensTheRedactionSetInsteadOfReplacingIt()
+    {
+        // Redaction is a fail-closed feature: a second call silently discarding the keys the first
+        // call registered would leak exactly the data the caller asked to hide.
+        var options = new OptionsBlex();
+        options.RedactDevToolsKeys("Label");
+        options.RedactDevToolsKeys("Token");
+
+        var state = new JsonObject
+        {
+            ["counter"] = new JsonObject { ["Count"] = 1, ["Label"] = "secret", ["Token"] = "abc" },
+        };
+
+        var sanitized = options.DevToolsStateSanitizer!(state);
+
+        Assert.Equal("<redacted>", sanitized["counter"]!["Label"]!.GetValue<string>());
+        Assert.Equal("<redacted>", sanitized["counter"]!["Token"]!.GetValue<string>());
+        Assert.Equal(1, sanitized["counter"]!["Count"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void RedactDevToolsKeys_ComposesWithASanitizerAssignedBeforeIt()
+    {
+        var options = new OptionsBlex
+        {
+            DevToolsStateSanitizer = state =>
+            {
+                var clone = (JsonObject)state.DeepClone();
+                clone["counter"]!["Count"] = -1;
+                return clone;
+            },
+        };
+        options.RedactDevToolsKeys("Label");
+
+        var state = new JsonObject
+        {
+            ["counter"] = new JsonObject { ["Count"] = 1, ["Label"] = "secret" },
+        };
+
+        var sanitized = options.DevToolsStateSanitizer!(state);
+
+        Assert.Equal(-1, sanitized["counter"]!["Count"]!.GetValue<int>()); // the earlier sanitizer ran
+        Assert.Equal("<redacted>", sanitized["counter"]!["Label"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void RedactDevToolsKeys_RedactsInsideArrays()
     {
         var options = new OptionsBlex();

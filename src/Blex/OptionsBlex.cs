@@ -33,17 +33,39 @@ public sealed class OptionsBlex
     /// <c>"&lt;redacted&gt;"</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Matching is case-insensitive: state slices are keyed by the generated PascalCase property
     /// name (<c>Token</c>) while action payloads use the camelCase parameter name (<c>token</c>),
     /// and a redaction helper that silently missed one of them would fail open.
+    /// </para>
+    /// <para>
+    /// Additive and composing: calling this more than once widens the redaction set rather than
+    /// replacing it, and a <see cref="DevToolsStateSanitizer"/> assigned <em>before</em> this call
+    /// still runs (redaction is applied to its output). A redaction feature that silently dropped
+    /// keys registered by an earlier call would fail open, which is the one thing it must not do.
+    /// Assigning <see cref="DevToolsStateSanitizer"/> after this call replaces redaction entirely.
+    /// </para>
     /// </remarks>
     public OptionsBlex RedactDevToolsKeys(params string[] keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
-        var set = new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase);
-        DevToolsStateSanitizer = state => RedactKeys(state, set);
+        if (_redactedKeys is not null)
+        {
+            // The installed sanitizer closes over this set, so widening it is enough.
+            foreach (var key in keys)
+                _redactedKeys.Add(key);
+            return this;
+        }
+
+        var set = _redactedKeys = new HashSet<string>(keys, StringComparer.OrdinalIgnoreCase);
+        var inner = DevToolsStateSanitizer;
+        DevToolsStateSanitizer = inner is null
+            ? state => RedactKeys(state, set)
+            : state => RedactKeys(inner(state) ?? state, set);
         return this;
     }
+
+    private HashSet<string>? _redactedKeys;
 
     private static JsonObject RedactKeys(JsonObject source, HashSet<string> keys)
     {

@@ -45,5 +45,34 @@ public partial class SearchStore
     {
         Query = "";
         Results = [];
+        Keystrokes = 0;
+        RequestsStarted = 0;
+    }
+
+    // ---- Debounced variant -------------------------------------------------------------------
+    // Same search, gated behind a quiet period. Latest still matters: once a request does get
+    // through, a later one that also gets through supersedes it.
+
+    [StateAttributeBlex] private int _keystrokes;
+    [StateAttributeBlex] private int _requestsStarted;
+
+    [ActionAttributeBlex] private void OnCountKeystroke() => Keystrokes++;
+
+    [EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+    private async Task OnTypeAhead(string query, CancellationToken ct)
+    {
+        // Reached only by the invocation that survived the 300 ms gate, so this counter is the
+        // honest count of requests the service would have seen.
+        RequestsStarted++;
+        Query = query;
+
+        await Task.Delay(700, ct);
+
+        if (SimulateFailure)
+            throw new InvalidOperationException($"The search service is unavailable (simulated) for '{query}'.");
+
+        Results = string.IsNullOrWhiteSpace(query)
+            ? []
+            : [.. Catalog.Where(c => c.Contains(query, StringComparison.OrdinalIgnoreCase))];
     }
 }

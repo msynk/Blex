@@ -67,6 +67,26 @@ public class BatchAndResetTests
     }
 
     [Fact]
+    public void ResetState_OnAnUnchangedStore_RecordsNothingAndDoesNotNotify()
+    {
+        using var harness = TestHarnessBlex.For<CounterStore>();
+        var store = harness.Store;
+        var notifications = 0;
+        store.StateChanged += () => notifications++;
+
+        store.ResetState();
+
+        Assert.Equal(0, harness.Log.Count);
+        Assert.Equal(0, notifications);
+
+        // ...and it still works once the store has actually drifted.
+        store.Add(3);
+        store.ResetState();
+        Assert.Equal(0, store.Count);
+        Assert.Equal("ResetState", harness.Log.Last!.ActionName);
+    }
+
+    [Fact]
     public void ResetState_IsNoOp_WhenStoreWasNeverRegistered()
     {
         var store = new CounterStore();

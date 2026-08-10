@@ -56,10 +56,19 @@ public static class MauiServiceCollectionExtensionsBlex
     }
 
     /// <summary>Registers in-app undo/redo as a singleton. Pairs with <see cref="UseBlex"/>.</summary>
-    public static MauiAppBuilder AddBlexHistory(this MauiAppBuilder builder, int maxEntries = 100)
+    /// <param name="builder">The MAUI app builder.</param>
+    /// <param name="maxEntries">Maximum number of undo entries retained.</param>
+    /// <param name="filter">
+    /// Optional predicate deciding which actions become their own undo step. See
+    /// <see cref="HistoryBlex(ManagerBlex, int, Func{ActionContextBlex, bool})"/>.
+    /// </param>
+    public static MauiAppBuilder AddBlexHistory(
+        this MauiAppBuilder builder,
+        int maxEntries = 100,
+        Func<ActionContextBlex, bool>? filter = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        builder.Services.AddBlexHistory(maxEntries, ServiceLifetime.Singleton);
+        builder.Services.AddBlexHistory(maxEntries, ServiceLifetime.Singleton, filter);
         return builder;
     }
 

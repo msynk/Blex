@@ -178,6 +178,38 @@ public partial class EffectConcurrencyStore
             throw new InvalidOperationException("queued-boom");
         Completed++;
     }
+
+    public int DebouncedBodyRuns { get; private set; }
+
+    // Short enough to keep tests quick, long enough that a burst dispatched in one go cannot
+    // straddle it.
+    [EffectAttributeBlex(DebounceMilliseconds = 40)]
+    private async Task OnTypeAhead(string query)
+    {
+        DebouncedBodyRuns++;
+        await NextGate();
+        Last = query;
+        Completed++;
+    }
+
+    // Debounce gates the burst; Latest cancels a request that is already in flight when the next
+    // one gets through.
+    [EffectAttributeBlex(DebounceMilliseconds = 40, Concurrency = EffectConcurrencyBlex.Latest)]
+    private async Task OnLiveSearch(string query, CancellationToken ct)
+    {
+        DebouncedBodyRuns++;
+        await NextGate().WaitAsync(ct);
+        Last = query;
+        Completed++;
+    }
+
+    [EffectAttributeBlex(DebounceMilliseconds = 40)]
+    private async Task OnDebouncedBoom()
+    {
+        DebouncedBodyRuns++;
+        await Task.Yield();
+        throw new InvalidOperationException("debounced-boom");
+    }
 }
 
 /// <summary>

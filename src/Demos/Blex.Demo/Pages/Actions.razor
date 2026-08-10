@@ -121,9 +121,18 @@
         Every store snapshots itself the first time it is registered with the manager.
         <code>ResetState()</code> restores that snapshot as a normal <code>ResetState</code> action:
         vetoable, observable, persisted and undoable. It is a no-op on a store that was never
-        registered.
+        registered, and equally a no-op on a store that is <em>already</em> holding its initial state -
+        resetting an untouched form notifies nobody, writes nothing and adds no undo step, the same
+        rule every other mutation in Blex follows.
     </p>
     <CodeBlock Code="@Reset" />
+
+    <p>
+        <code>ManagerBlex.ResetAll()</code> does the same across every registered store - the usual
+        sign-out move. Each store resets as its own action, so middleware can exempt individual
+        stores and DevTools shows one entry per store rather than one opaque global wipe.
+    </p>
+    <CodeBlock Code="@ResetAll" Title="Application-wide reset" Compact="true" />
 
     <h2>Async actions</h2>
     <p>
@@ -292,6 +301,21 @@
 
     private const string Reset = """
         store.ResetState();   // back to the state captured at first registration
+        """;
+
+    private const string ResetAll = """
+        @inject ManagerBlex Manager
+
+        // Sign-out: every store back to its registered state, each as its own action.
+        private void SignOut()
+        {
+            _auth.Clear();
+            Manager.ResetAll();
+        }
+
+        // Keep one store out of it with a filter veto:
+        builder.Services.AddBlex(options => options.UseFilter(
+            ctx => !(ctx.Store.Name == "theme" && ctx.ActionName == "ResetState")));
         """;
 
     private const string AsyncAction = """

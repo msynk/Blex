@@ -100,6 +100,17 @@
             <button class="btn btn-sm btn-danger" @onclick="Contacts.RemoveAll">RemoveAll</button>
             <button class="btn btn-sm btn-ghost" @onclick="Contacts.Reseed">SetAll - reseed</button>
         </div>
+
+        <div class="row" style="margin-top:0.6rem">
+            <button class="btn btn-sm" title="SetOne with an id that exists" @onclick="() => LateSave(1)">
+                SetOne - late save for id 1
+            </button>
+            <button class="btn btn-sm" title="SetOne with an id that does not exist" @onclick="() => LateSave(99)">
+                SetOne - late save for id 99
+            </button>
+            <button class="btn btn-sm btn-ghost" @onclick="ReseedIdentical">SetAll - identical payload</button>
+        </div>
+        <p class="small muted" style="margin-top:0.4rem">@_setNote</p>
     </DemoCard>
 
     <h2>EntityStateBlex members</h2>
@@ -122,6 +133,27 @@
             fires and no action is recorded for a change that did not happen.
         </p>
     </Callout>
+
+    <h3>Set vs Upsert</h3>
+    <p>
+        <code>UpsertOne</code> inserts an unknown id; <code>SetOne</code> refuses to. That is the
+        difference between "save this, wherever it came from" and "apply this update to a row I
+        already have". Reach for <code>SetOne</code>/<code>SetMany</code> when a late response must
+        not resurrect a record that was deleted while it was in flight - a stale <code>PUT</code>
+        reply arriving after the user removed the row leaves the list alone instead of putting the
+        row back.
+    </p>
+    <CodeBlock Code="@SetVsUpsert" Title="A late response must not resurrect a deleted row" Compact="true" />
+
+    <h3>Writing the same value twice costs nothing</h3>
+    <p>
+        Every write operation compares before it commits. Re-applying a value that is already there -
+        <code>SetAll</code> with an unchanged server response, <code>UpsertMany</code> where only one
+        of fifty rows actually moved - returns the same state instance, so nothing notifies, nothing
+        persists, and no undo step appears for a mutation that did not happen. Polling a list
+        endpoint on a timer is therefore free while the data is unchanged.
+    </p>
+    <CodeBlock Code="@NoOpIdentity" Title="Idempotent reseeding" Compact="true" />
 
     <h3>Changing an entity's id</h3>
     <p>
@@ -173,6 +205,28 @@
         _name = "";
     }
 
+    private string _setNote = "";
+
+    private void LateSave(int id)
+    {
+        var before = Contacts.Contacts;
+        Contacts.LateSaveResponse(id);
+
+        _setNote = ReferenceEquals(before, Contacts.Contacts)
+            ? $"id {id} is not in the collection - SetOne returned the same state instance, so nothing was notified or recorded."
+            : $"id {id} was present, so it was replaced in place.";
+    }
+
+    private void ReseedIdentical()
+    {
+        var before = Contacts.Contacts;
+        Contacts.ReseedIdentical();
+
+        _setNote = ReferenceEquals(before, Contacts.Contacts)
+            ? "Identical payload - SetAll returned the same state instance. No notification, no action recorded, no undo step."
+            : "The payload differed, so a new state was committed.";
+    }
+
     private static readonly IReadOnlyList<ApiTable.Row> StateRows =
     [
         new("IReadOnlyList&lt;TKey&gt; Ids", "The ids in display order - insertion order, or the sort comparer's order."),
@@ -195,6 +249,8 @@
         new("UpdateOne(state, id, Func&lt;TEntity, TEntity&gt;)", "Applies a transform to one entity. No-op if the id is absent. Handles an id change."),
         new("UpdateMany(state, ids, Func&lt;TEntity, TEntity&gt;)", "Applies a transform to each listed id, ignoring missing ones."),
         new("Map(state, Func&lt;TEntity, TEntity&gt;)", "Applies a transform to every entity."),
+        new("SetOne(state, entity)", "Replaces the entity with that id. No-op if the id is absent - unlike <code>UpsertOne</code>, it never inserts."),
+        new("SetMany(state, entities)", "Replaces each entity whose id is already present, ignoring the rest."),
         new("RemoveOne(state, id)", "Removes one entity. No-op if absent."),
         new("RemoveMany(state, ids)", "Removes the listed entities."),
         new("RemoveAll(state)", "Removes everything."),
@@ -267,6 +323,30 @@
         [ActionAttributeBlex] private void OnToggle(int id)    => Todos = Adapter.UpdateOne(Todos, id, t => t with { Done = !t.Done });
         [ActionAttributeBlex] private void OnRemove(int id)    => Todos = Adapter.RemoveOne(Todos, id);
         [ActionAttributeBlex] private void OnLoaded(Todo[] t)  => Todos = Adapter.SetAll(Todos, t);
+        """;
+
+    private const string SetVsUpsert = """
+        // The row may have been deleted while the save was in flight. UpsertOne would put it back.
+        [EffectAttributeBlex]
+        private async Task OnSave(Todo todo)
+        {
+            var saved = await _api.PutAsync(todo);
+            Todos = Adapter.SetOne(Todos, saved);      // applies only if the id is still there
+        }
+
+        // Same rule for a batch: ids the user removed in the meantime are ignored.
+        [ActionAttributeBlex] private void OnPatched(Todo[] changed) => Todos = Adapter.SetMany(Todos, changed);
+        """;
+
+    private const string NoOpIdentity = """
+        [EffectAttributeBlex(Mode = EffectModeBlex.Drop)]
+        private async Task OnPoll()
+        {
+            var fresh = await _api.GetTodosAsync();
+
+            // Identical payload -> same instance back -> no notification, no persist, no undo step.
+            Todos = Adapter.SetAll(Todos, fresh);
+        }
         """;
 
     private const string Computed = """

@@ -199,6 +199,81 @@ public sealed class ManagerBlex
     }
 
     /// <summary>
+    /// Observes a projection across the whole application and invokes <paramref name="onChanged"/>
+    /// only when the selected value actually changes -- the cross-store counterpart to
+    /// <see cref="StoreSubscriptionExtensionsBlex.Subscribe{T}(IStoreBlex, Func{T}, Action{T}, IEqualityComparer{T}, bool)"/>.
+    /// Dispose the returned token to stop observing.
+    /// </summary>
+    /// <param name="selector">
+    /// Projects the observed value. It runs after every action of every store, so keep it cheap --
+    /// read already-memoized computed properties rather than recomputing over collections.
+    /// </param>
+    /// <param name="onChanged">Invoked with <c>(previous, current)</c> whenever the projection changes.</param>
+    /// <param name="comparer">Custom equality; defaults to <see cref="EqualityComparer{T}.Default"/>.</param>
+    /// <param name="fireImmediately">When <c>true</c>, invokes the callback once with the value at subscription time.</param>
+    /// <remarks>
+    /// Without this, a value derived from two stores has to be recomputed on every action of every
+    /// store -- the cross-store equivalent of re-rendering the whole app on any change. Selector and
+    /// callback exceptions are isolated and reported through <see cref="OnError"/>, like every other
+    /// subscription; a throwing selector leaves the last known value in place so one bad read does
+    /// not permanently wedge the subscription.
+    /// </remarks>
+    public IDisposable Subscribe<T>(
+        Func<T> selector,
+        Action<T, T> onChanged,
+        IEqualityComparer<T>? comparer = null,
+        bool fireImmediately = false)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        ArgumentNullException.ThrowIfNull(onChanged);
+        var equality = comparer ?? EqualityComparer<T>.Default;
+        var last = selector();
+
+        var subscription = Subscribe(_ =>
+        {
+            var current = selector();
+            if (equality.Equals(current, last))
+                return;
+
+            var previous = last;
+            last = current;
+            onChanged(previous, current);
+        });
+
+        if (!fireImmediately)
+            return subscription;
+
+        try
+        {
+            onChanged(last, last);
+        }
+        catch
+        {
+            // The caller never receives the token when this throws, so the handler would stay
+            // attached for the lifetime of the manager. Detach before letting it surface.
+            subscription.Dispose();
+            throw;
+        }
+
+        return subscription;
+    }
+
+    /// <summary>
+    /// Single-value overload of
+    /// <see cref="Subscribe{T}(Func{T}, Action{T, T}, IEqualityComparer{T}, bool)"/>, for callbacks
+    /// that do not care about the previous value.
+    /// </summary>
+    public IDisposable Subscribe<T>(
+        Func<T> selector,
+        Action<T> onChanged,
+        IEqualityComparer<T>? comparer = null,
+        bool fireImmediately = false)
+    {
+        ArgumentNullException.ThrowIfNull(onChanged);
+        return Subscribe<T>(selector, (_, current) => onChanged(current), comparer, fireImmediately);
+    }
+
+    /// <summary>
     /// Subscribes with an asynchronous reactor (e.g. to trigger an effect on another store). The
     /// returned task is observed; failures are logged rather than surfaced as unobserved exceptions.
     /// </summary>
@@ -300,6 +375,38 @@ public sealed class ManagerBlex
 
             if (store is StoreBaseBlex sb)
                 sb.Detach();
+        }
+    }
+
+    /// <summary>
+    /// Resets every registered store to the state it had when it was first registered -- the
+    /// application-wide counterpart to <see cref="StoreBaseBlex.ResetState"/> (Pinia's
+    /// <c>$reset</c> applied across the whole tree). Each store resets as its own normal,
+    /// vetoable, observable, persisted and time-travelable <c>ResetState</c> action, so a filter
+    /// can exempt individual stores.
+    /// </summary>
+    /// <remarks>
+    /// A store that fails to reset (a throwing deserializer, a throwing subscriber) is reported
+    /// through <see cref="OnError"/> and skipped; the remaining stores still reset. Stores that
+    /// were never registered through this manager are untouched.
+    /// </remarks>
+    public void ResetAll()
+    {
+        // Snapshot the registry: each reset raises StateChanged, and a handler that registers or
+        // unregisters a store swaps in a new array rather than mutating this one.
+        foreach (var store in _stores)
+        {
+            if (store is not StoreBaseBlex sb)
+                continue;
+
+            try
+            {
+                sb.ResetState();
+            }
+            catch (Exception ex)
+            {
+                ReportError("reset", ex, store.Name);
+            }
         }
     }
 

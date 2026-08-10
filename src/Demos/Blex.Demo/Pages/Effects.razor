@@ -183,6 +183,71 @@
         }
     </DemoCard>
 
+    <h2>Debouncing</h2>
+    <p>
+        <code>Latest</code> stops a stale response from landing, but it still sends a request per
+        keystroke. <code>DebounceMilliseconds</code> waits for a quiet period first, so only the
+        invocation the user actually paused on runs at all. The two compose, and together they are
+        the complete type-ahead recipe: debounce decides <em>whether</em> to ask, <code>Latest</code>
+        decides <em>which answer</em> is allowed to land.
+    </p>
+    <CodeBlock Code="@Debounce" Title="The whole recipe" Compact="true" />
+
+    <p>
+        The wait happens before anything observable, which is what makes it worth generating rather
+        than hand-rolling. A superseded invocation never flips <code>XxxIsLoading</code>, never
+        clears <code>XxxError</code>, is never offered to middleware and records no action - so a
+        spinner bound to <code>IsLoading</code> does not blink once per keystroke, and DevTools does
+        not fill up with searches that never happened.
+    </p>
+
+    <DemoCard Title="Keystrokes in, requests out"
+              Description="Type a word at normal speed. The keystroke counter climbs per character; the request counter climbs once, when you pause."
+              Source="@DebouncedSource">
+        <div class="row">
+            <input type="search" placeholder="Type &quot;blazor&quot; quickly…"
+                   value="@_debouncedBox" @oninput="OnDebouncedInput" style="flex:1;min-width:220px" />
+            <button class="btn btn-sm btn-ghost" @onclick="ClearDebounced">Clear</button>
+        </div>
+
+        <div class="readout" style="margin-top:0.8rem">
+            <div class="readout__item">
+                <span class="readout__label">Keystrokes</span>
+                <span class="readout__value">@Search.Keystrokes</span>
+            </div>
+            <div class="readout__item">
+                <span class="readout__label">Requests started</span>
+                <span class="readout__value readout__value--accent">@Search.RequestsStarted</span>
+            </div>
+            <div class="readout__item">
+                <span class="readout__label">TypeAheadIsLoading</span>
+                <span class="readout__value">@(Search.TypeAheadIsLoading ? "true" : "false")</span>
+            </div>
+        </div>
+
+        @if (Search.TypeAheadError is not null)
+        {
+            <p class="small muted" style="margin-top:0.8rem;margin-bottom:0">@Search.TypeAheadError.Message</p>
+        }
+        else if (Search.HasResults)
+        {
+            <ul class="list" style="margin-top:0.8rem">
+                @foreach (var result in Search.Results)
+                {
+                    <li><span class="list__name">@result</span></li>
+                }
+            </ul>
+        }
+    </DemoCard>
+
+    <Callout Kind="Callout.CalloutKind.Note" Title="The gate is per effect, not per argument">
+        <p style="margin-bottom:0">
+            Every invocation of the same effect shares one gate, whatever its arguments. That is
+            what you want for a search box; if you need one gate per key (say, per row in a grid),
+            debounce at the call site instead.
+        </p>
+    </Callout>
+
     <h2>Rules</h2>
     <ul>
         <li>
@@ -251,6 +316,24 @@
         Search.Clear();
     }
 
+    private string _debouncedBox = "";
+
+    private async Task OnDebouncedInput(ChangeEventArgs e)
+    {
+        _debouncedBox = e.Value?.ToString() ?? "";
+
+        // Counted per keystroke; the effect below is invoked per keystroke too, but its gate means
+        // only the one the user paused on ever reaches the body.
+        Search.CountKeystroke();
+        await Search.TypeAhead(_debouncedBox);
+    }
+
+    private void ClearDebounced()
+    {
+        _debouncedBox = "";
+        Search.Clear();
+    }
+
     private static readonly IReadOnlyList<ApiTable.Row> GeneratedRows =
     [
         new("Task LoadUser(int id)", "The public wrapper. Note that the <code>CancellationToken</code> parameter is <em>not</em> on it - the generator supplies the token."),
@@ -316,6 +399,43 @@
                 await Task.Delay(700, ct);          // the "network"
                 Results = [.. Catalog.Where(c => c.Contains(query, StringComparison.OrdinalIgnoreCase))];
             }
+        }
+        """;
+
+    private const string Debounce = """
+        [EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+        private async Task OnTypeAhead(string query, CancellationToken ct)
+        {
+            Query = query;
+            Results = await _api.SearchAsync(query, ct);
+        }
+        """;
+
+    private const string DebouncedSource = """
+        [StoreAttributeBlex(Name = "search")]
+        public partial class SearchStore
+        {
+            [StateAttributeBlex] private int _keystrokes;
+            [StateAttributeBlex] private int _requestsStarted;
+
+            [ActionAttributeBlex] private void OnCountKeystroke() => Keystrokes++;
+
+            [EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+            private async Task OnTypeAhead(string query, CancellationToken ct)
+            {
+                // Reached only by the invocation that survived the gate.
+                RequestsStarted++;
+                Query = query;
+                await Task.Delay(700, ct);          // the "network"
+                Results = [.. Catalog.Where(c => c.Contains(query, StringComparison.OrdinalIgnoreCase))];
+            }
+        }
+
+        @* The component invokes it on every keystroke -- the gate does the filtering. *@
+        private async Task OnInput(ChangeEventArgs e)
+        {
+            Search.CountKeystroke();
+            await Search.TypeAhead(e.Value?.ToString() ?? "");
         }
         """;
 

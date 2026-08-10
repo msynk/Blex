@@ -4,8 +4,8 @@
          Lead="The generator validates every store and fails the build with a precise message rather than emitting code that does not compile.">
 
     <p>
-        All sixteen diagnostics live in the <code>Blex</code> category. Fourteen are errors - they
-        describe shapes the generator genuinely cannot emit - and two are warnings about code that
+        All nineteen diagnostics live in the <code>Blex</code> category. Sixteen are errors - they
+        describe shapes the generator genuinely cannot emit - and three are warnings about code that
         compiles but almost certainly does not do what you meant.
     </p>
 
@@ -54,7 +54,7 @@
 
     <h2>Suppressing a warning</h2>
     <p>
-        The two warnings are suppressible like any other. Blex's own test project suppresses
+        The three warnings are suppressible like any other. Blex's own test project suppresses
         <code>BLEX011</code> project-wide, because it has a fixture that deliberately declares a
         value-returning action.
     </p>
@@ -365,6 +365,46 @@
             // Something that only performs work (no value) is an action, not a computed:
             [ActionAttributeBlex]
             private void OnRefreshSummary() { }
+            """),
+
+        new("BLEX018", "Blex member attribute outside a store", false,
+            "A <code>[StateAttributeBlex]</code>, <code>[ComputedAttributeBlex]</code>, <code>[ActionAttributeBlex]</code> or <code>[EffectAttributeBlex]</code> member only means something inside a <code>[StoreAttributeBlex]</code> class. Outside one it compiles cleanly and generates nothing at all - which reads exactly like a broken generator, so this warning says so instead.",
+            """
+            // Forgot the [StoreAttributeBlex] -- Count never appears.
+            public partial class CounterStore
+            {
+                [StateAttributeBlex] private int _count;    // BLEX018
+            }
+
+            // Same for a type nested inside a store: the nested type is not itself a store.
+            [StoreAttributeBlex]
+            public partial class OuterStore
+            {
+                [StateAttributeBlex] private int _count;
+                public class Inner { [StateAttributeBlex] private int _x; }   // BLEX018
+            }
+            """,
+            """
+            [StoreAttributeBlex]
+            public partial class CounterStore
+            {
+                [StateAttributeBlex] private int _count;
+            }
+            """),
+
+        new("BLEX019", "Effect debounce cannot be negative", true,
+            "<code>DebounceMilliseconds</code> becomes a <code>Task.Delay</code> in the generated wrapper, which rejects a negative delay at runtime - from inside generated code, where the stack trace explains nothing. Use <code>0</code> to disable debouncing.",
+            """
+            [EffectAttributeBlex(DebounceMilliseconds = -1)]      // BLEX019
+            private async Task OnSearch(string query) { }
+            """,
+            """
+            [EffectAttributeBlex(DebounceMilliseconds = 300)]
+            private async Task OnSearch(string query) { }
+
+            // 0 (the default) means "no debouncing":
+            [EffectAttributeBlex]
+            private async Task OnSearch(string query) { }
             """),
     ];
 

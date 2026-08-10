@@ -105,6 +105,23 @@
         as state, so an argument named <code>password</code> is redacted too.
     </p>
 
+    <p>
+        It is additive, and it composes. Calling it a second time <em>widens</em> the redaction set
+        rather than replacing it, so a library and an app can each register their own secrets without
+        one silently unmasking the other's. A custom <code>DevToolsStateSanitizer</code> assigned
+        <em>before</em> the call still runs - redaction is applied on top of its output - which lets
+        you reshape the tree and redact it in the same pipeline.
+    </p>
+    <CodeBlock Code="@Compose" Title="Additive and composing" Compact="true" />
+
+    <Callout Kind="Callout.CalloutKind.Gotcha" Title="Assigning the sanitizer last wins">
+        <p style="margin-bottom:0">
+            The composition is one-directional: redaction wraps whatever sanitizer was already there.
+            Assigning <code>DevToolsStateSanitizer</code> <em>after</em> calling
+            <code>RedactDevToolsKeys</code> replaces redaction outright. Register redaction last.
+        </p>
+    </Callout>
+
     <Callout Kind="Callout.CalloutKind.Gotcha" Title="Redaction and time-travel fight each other">
         <p style="margin-bottom:0">
             DevTools echoes the state it was <em>shown</em> back to the app when you jump. A redacted
@@ -196,10 +213,7 @@
     private const string Sanitize = """
         builder.Services.AddBlex(options =>
         {
-            // Shorthand: redact these keys anywhere in the tree (and in action payloads).
-            options.RedactDevToolsKeys("token", "password", "ssn");
-
-            // Or take full control of the state tree.
+            // Take full control of the state tree...
             options.DevToolsStateSanitizer = state =>
             {
                 var clone = (JsonObject)state.DeepClone();
@@ -208,9 +222,22 @@
                 return clone;
             };
 
-            // And of the action label.
+            // ...and redact these keys anywhere in the tree (and in action payloads) on top of it.
+            // Register redaction last: it wraps the sanitizer above, but an assignment after this
+            // call would replace it.
+            options.RedactDevToolsKeys("token", "password", "ssn");
+
+            // The action label has its own hook.
             options.DevToolsActionSanitizer = label => label.Replace(_userId, "<id>");
         });
+        """;
+
+    private const string Compose = """
+        // A shared setup module redacts what it knows about...
+        options.RedactDevToolsKeys("token");
+
+        // ...and the app adds its own. The set widens; "token" stays redacted.
+        options.RedactDevToolsKeys("ssn", "dateOfBirth");
         """;
 
     private const string Disable = """

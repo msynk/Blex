@@ -66,9 +66,14 @@ builder.Services.AddBlexLocalStoragePersistence(options =>
         // Anything else is from a future build of the site: discard rather than guess.
         return null;
     };
+
+    // Open this site in two tabs and change the theme in one: without this, whichever tab acted
+    // last would silently win and the other would only catch up on its next reload.
+    options.SyncAcrossTabs = true;
 });
 
 // In-app undo/redo across every store. <ProviderBlex> calls Start() once rehydration finishes.
+// No filter here: the docs demo is more useful when every action is its own step.
 builder.Services.AddBlexHistory(maxEntries: 50);
 
 await builder.Build().RunAsync();

@@ -61,9 +61,19 @@ public sealed class ReduxDevToolsConnectorBlex : IDevToolsBlex, IAsyncDisposable
         }
         catch (JSException ex)
         {
-            // A missing static asset or an extension quirk must not break app startup.
-            Console.Error.WriteLine($"[Blex] DevTools bridge unavailable: {ex.Message}");
+            // A missing static asset or an extension quirk must not break app startup -- but it
+            // should be visible. Routed through the manager so it reaches the app's OnError like
+            // every other non-fatal failure, instead of only a console line nobody reads.
+            Report(ex, "connecting the DevTools bridge");
         }
+    }
+
+    private void Report(Exception exception, string detail)
+    {
+        if (_manager is { } manager)
+            manager.ReportError("devtools", exception, detail);
+        else
+            Console.Error.WriteLine($"[Blex] {detail}: {exception.Message}");
     }
 
     /// <inheritdoc />
@@ -87,14 +97,14 @@ public sealed class ReduxDevToolsConnectorBlex : IDevToolsBlex, IAsyncDisposable
     // DevTools is a non-critical sink, so interop is dispatched without blocking the dispatch
     // pipeline. We still observe the task so a transient interop failure can't surface as an
     // unobserved task exception.
-    private static void FireAndForget(ValueTask task)
+    private void FireAndForget(ValueTask task)
     {
         if (task.IsCompletedSuccessfully)
             return;
 
-        _ = Awaited(task);
+        _ = Awaited(this, task);
 
-        static async Task Awaited(ValueTask t)
+        static async Task Awaited(ReduxDevToolsConnectorBlex self, ValueTask t)
         {
             try
             {
@@ -106,7 +116,7 @@ public sealed class ReduxDevToolsConnectorBlex : IDevToolsBlex, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[Blex] DevTools interop failed: {ex.Message}");
+                self.Report(ex, "sending to DevTools");
             }
         }
     }

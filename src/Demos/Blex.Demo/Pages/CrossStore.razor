@@ -38,7 +38,9 @@
             <button class="btn btn-primary" @onclick="Place" disabled="@string.IsNullOrWhiteSpace(_item)">Place order</button>
             <button class="btn" @onclick="Orders.CancelLast" disabled="@(Orders.Count == 0)">Cancel last</button>
             <button class="btn btn-ghost" @onclick="ClearBoth">Clear both</button>
+            <button class="btn btn-ghost" title="ManagerBlex.ResetAll()" @onclick="ResetEverything">ResetAll()</button>
         </div>
+        <p class="small muted" style="margin-top:0.5rem;margin-bottom:0">@_resetNote</p>
 
         <div class="grid grid--2" style="margin-top:0.9rem">
             <div class="card">
@@ -187,12 +189,33 @@
         Notifications.Clear();
     }
 
+    private string _resetNote = "";
+
+    /// <summary>
+    /// One call, every registered store back to its registered state. Watch the Inspector: it lists
+    /// a separate <c>ResetState</c> entry per store that actually had something to undo - stores
+    /// already sitting on their initial state are skipped rather than recorded.
+    /// </summary>
+    private void ResetEverything()
+    {
+        var recorded = new List<string>();
+        using (Manager.Subscribe(ctx => recorded.Add(ctx.QualifiedName)))
+        {
+            Manager.ResetAll();
+        }
+
+        _resetNote = recorded.Count == 0
+            ? "Every store already held its registered state, so ResetAll recorded nothing at all."
+            : $"Recorded {recorded.Count} action(s): {string.Join(", ", recorded)}.";
+    }
+
     private static readonly IReadOnlyList<ApiTable.Row> RegistryRows =
     [
         new("IReadOnlyList&lt;IStoreBlex&gt; Stores", "Every registered store."),
         new("TStore? GetStore&lt;TStore&gt;()", "The first registered store of that type, or <code>null</code>."),
         new("void Register(IStoreBlex)", "Adds a store. Idempotent. Captures its initial state so <code>ResetState()</code> has somewhere to return to."),
         new("void Unregister(IStoreBlex)", "Removes a store; it keeps working, but its actions are no longer observed."),
+        new("void ResetAll()", "Resets every registered store to its registered state, each as its own normal <code>ResetState</code> action. Stores already holding that state are skipped; one that fails is reported and skipped, and the rest still reset."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> ObservationRows =
@@ -202,6 +225,7 @@
         new("IDisposable SubscribeTo&lt;TStore&gt;(Action&lt;…&gt;)", "Only actions from that store type."),
         new("IDisposable SubscribeToAction(string, Action&lt;…&gt;)", "Matches the bare name (<code>\"Increment\"</code>) or the qualified name (<code>\"counter/Increment\"</code>)."),
         new("IDisposable SubscribeAsync(Func&lt;…, Task&gt;, Func&lt;…, bool&gt;? filter)", "An async reactor. The task is observed; failures are reported rather than left unobserved."),
+        new("IDisposable Subscribe&lt;T&gt;(Func&lt;T&gt; selector, Action&lt;T&gt;, IEqualityComparer&lt;T&gt;?, bool fireImmediately)", "Fires only when a projection <em>spanning stores</em> changes. An <code>Action&lt;T, T&gt;</code> overload delivers <code>(previous, current)</code>. See <a href=\"subscriptions\">Subscriptions</a>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> StateRows =

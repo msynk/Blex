@@ -170,6 +170,22 @@ public sealed class GeneratorBlex : IIncrementalGenerator
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor MemberOutsideStore = new(
+        "BLEX018",
+        "Blex member attribute outside a store",
+        "'{0}' is marked with a Blex member attribute but its containing type '{1}' is not a Blex store, so nothing is generated for it; add [StoreAttributeBlex] to '{1}' or remove the attribute",
+        "Blex",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
+    private static readonly DiagnosticDescriptor NegativeDebounce = new(
+        "BLEX019",
+        "Effect debounce cannot be negative",
+        "Effect '{0}' sets a negative DebounceMilliseconds; use 0 to disable debouncing",
+        "Blex",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     private static readonly DiagnosticDescriptor ConflictingBaseType = new(
         "BLEX016",
         "Store cannot have another base class",
@@ -187,6 +203,24 @@ public sealed class GeneratorBlex : IIncrementalGenerator
             predicate: static (node, _) => node is TypeDeclarationSyntax,
             transform: static (ctx, _) => Transform(ctx));
 
+        // A [StateAttributeBlex]/[ComputedAttributeBlex]/[ActionAttributeBlex]/[EffectAttributeBlex]
+        // member only means something inside a [StoreAttributeBlex] class. Outside one it compiles
+        // cleanly and generates nothing at all, which reads exactly like a broken generator -- so
+        // say so instead of staying silent.
+        foreach (var memberAttribute in new[] { StateAttributeBlex, ComputedAttributeBlex, ActionAttributeBlex, EffectAttributeBlex })
+        {
+            var orphans = context.SyntaxProvider.ForAttributeWithMetadataName(
+                memberAttribute,
+                predicate: static (_, _) => true,
+                transform: static (ctx, _) => DetectOrphan(ctx));
+
+            context.RegisterSourceOutput(orphans, static (spc, diagnostic) =>
+            {
+                if (diagnostic is not null)
+                    spc.ReportDiagnostic(diagnostic.ToDiagnostic());
+            });
+        }
+
         context.RegisterSourceOutput(stores, static (spc, result) =>
         {
             foreach (var diagnostic in result.Diagnostics)
@@ -202,6 +236,23 @@ public sealed class GeneratorBlex : IIncrementalGenerator
                 spc.AddSource(hint, SourceText.From(Emit(model), Encoding.UTF8));
             }
         });
+    }
+
+    /// <summary>
+    /// Reports BLEX018 when a Blex member attribute sits on a member whose containing type is not
+    /// a <c>[StoreAttributeBlex]</c> class. Returns <c>null</c> for the normal (in-store) case.
+    /// </summary>
+    private static DiagnosticInfoBlex? DetectOrphan(GeneratorAttributeSyntaxContext ctx)
+    {
+        var member = ctx.TargetSymbol;
+        var container = member.ContainingType;
+        if (container is not null && HasAttribute(container, StoreAttributeBlex))
+            return null;
+
+        return new DiagnosticInfoBlex(
+            MemberOutsideStore,
+            LocationInfoBlex.From(member.Locations.FirstOrDefault()),
+            new EquatableArrayBlex<string>([member.Name, container?.Name ?? "<global>"]));
     }
 
     private static TransformOutputBlex Transform(GeneratorAttributeSyntaxContext ctx)
@@ -426,6 +477,18 @@ public sealed class GeneratorBlex : IIncrementalGenerator
                     if (concurrencyArg.Value is int c)
                         concurrency = c;
 
+                    var debounce = 0;
+                    var debounceArg = attr.NamedArguments.FirstOrDefault(a => a.Key == "DebounceMilliseconds").Value;
+                    if (debounceArg.Value is int d)
+                        debounce = d;
+
+                    // Task.Delay rejects a negative delay at runtime, deep inside generated code.
+                    if (debounce < 0)
+                    {
+                        Report(NegativeDebounce, em.Locations.FirstOrDefault(), em.Name);
+                        break;
+                    }
+
                     // A trailing CancellationToken parameter is supplied by the wrapper (it does
                     // not appear on the public method) and enables CancelXxx() / Latest semantics.
                     var parameters = em.Parameters;
@@ -450,6 +513,7 @@ public sealed class GeneratorBlex : IIncrementalGenerator
                         isValueTaskEffect,
                         concurrency,
                         hasToken,
+                        debounce,
                         new EquatableArrayBlex<ParamModelBlex>(prms)));
                     break;
                 }
@@ -616,6 +680,8 @@ public sealed class GeneratorBlex : IIncrementalGenerator
                 Check($"__{e.WrapperName}Version");
             if (e.Concurrency == 3)
                 Check($"__{e.WrapperName}Queue");
+            if (e.DebounceMilliseconds > 0)
+                Check($"__{e.WrapperName}Debounce");
         }
     }
 
@@ -862,6 +928,8 @@ public sealed class GeneratorBlex : IIncrementalGenerator
             var isLatest = e.Concurrency == 1;
             var isDrop = e.Concurrency == 2;
             var isQueue = e.Concurrency == 3;
+            var debounceField = $"__{e.WrapperName}Debounce";
+            var isDebounced = e.DebounceMilliseconds > 0;
 
             var cancellationNote = e.HasCancellationToken
                 ? " Cancellations via the effect's own token are not treated as errors."
@@ -886,9 +954,50 @@ public sealed class GeneratorBlex : IIncrementalGenerator
             if (isQueue)
                 sb.AppendLine($"{body}private global::System.Threading.Tasks.Task {queueField} = global::System.Threading.Tasks.Task.CompletedTask;");
 
-            sb.AppendLine($"{body}/// <summary>Runs the <c>{DocEscape(e.ActionLabel)}</c> effect, managing its loading/error state.</summary>");
+            if (isDebounced)
+                sb.AppendLine($"{body}private global::System.Threading.CancellationTokenSource? {debounceField};");
+
+            var debounceNote = isDebounced
+                ? $" Waits for a quiet period of {e.DebounceMilliseconds} ms first; a newer invocation supersedes this one, which then returns without running."
+                : "";
+            sb.AppendLine($"{body}/// <summary>Runs the <c>{DocEscape(e.ActionLabel)}</c> effect, managing its loading/error state.{debounceNote}</summary>");
             sb.AppendLine($"{body}public async global::System.Threading.Tasks.Task {e.WrapperName}({paramList})");
             sb.AppendLine($"{body}{{");
+
+            if (isDebounced)
+            {
+                // The gate runs before anything observable: a superseded invocation must not flip
+                // the loading counter, clear the error, reach middleware or record an action -- it
+                // never happened as far as the rest of the app is concerned. The Drop check below
+                // deliberately sits after it, so the "is one already running" question is asked
+                // about the invocation that actually survived the quiet period.
+                sb.AppendLine($"{body}    var __blexDebounceCts = new global::System.Threading.CancellationTokenSource();");
+                sb.AppendLine($"{body}    var __blexDebouncePrevious = {debounceField};");
+                sb.AppendLine($"{body}    {debounceField} = __blexDebounceCts;");
+                // Cancel the predecessor but leave its disposal to its own finally: disposing a
+                // source another frame is still awaiting on is the kind of thing that only breaks
+                // in production.
+                sb.AppendLine($"{body}    __blexDebouncePrevious?.Cancel();");
+                sb.AppendLine($"{body}    try");
+                sb.AppendLine($"{body}    {{");
+                // No ConfigureAwait(false): resume on the dispatch context (the Blazor renderer)
+                // so the body mutates state on the thread every other action runs on.
+                sb.AppendLine($"{body}        await global::System.Threading.Tasks.Task.Delay({e.DebounceMilliseconds}, __blexDebounceCts.Token);");
+                sb.AppendLine($"{body}    }}");
+                sb.AppendLine($"{body}    catch (global::System.OperationCanceledException)");
+                sb.AppendLine($"{body}    {{");
+                sb.AppendLine($"{body}        return; // superseded by a newer invocation");
+                sb.AppendLine($"{body}    }}");
+                sb.AppendLine($"{body}    finally");
+                sb.AppendLine($"{body}    {{");
+                // Only the invocation still holding the field may clear it; a superseded one would
+                // otherwise erase its successor's source and break the next supersession.
+                sb.AppendLine($"{body}        if (object.ReferenceEquals({debounceField}, __blexDebounceCts))");
+                sb.AppendLine($"{body}            {debounceField} = null;");
+                sb.AppendLine($"{body}        __blexDebounceCts.Dispose();");
+                sb.AppendLine($"{body}    }}");
+                sb.AppendLine();
+            }
 
             if (isDrop) // ignore while one is running
             {

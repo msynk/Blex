@@ -63,6 +63,23 @@ public partial class ContactsStore
 
     [ActionAttributeBlex] private void OnRemoveAll() => Contacts = Adapter.RemoveAll(Contacts);
 
+    /// <summary>
+    /// Stands in for a save response arriving after the row may already have been removed.
+    /// <c>SetOne</c> applies it only if the id is still present; <c>UpsertOne</c> would put a
+    /// deleted contact back.
+    /// </summary>
+    [ActionAttributeBlex]
+    private void OnLateSaveResponse(int id)
+        => Contacts = Adapter.SetOne(Contacts, new Contact(id, $"Contact {id} (saved)", "Research", true));
+
+    /// <summary>
+    /// Reseeds with the exact same four contacts. The adapter compares before it commits, so this
+    /// returns the same state instance: no notification, no action recorded, no undo step.
+    /// </summary>
+    [ActionAttributeBlex]
+    private void OnReseedIdentical()
+        => Contacts = Adapter.SetAll(Contacts, [.. Contacts.All]);
+
     [ActionAttributeBlex]
     private void OnReseed()
     {

@@ -117,15 +117,20 @@ public static class ServiceCollectionExtensionsBlex
     /// Defaults to <see cref="ServiceLifetime.Scoped"/>; must match the lifetime passed to
     /// <see cref="AddBlex"/>.
     /// </param>
+    /// <param name="filter">
+    /// Optional predicate deciding which actions become their own undo step. See
+    /// <see cref="HistoryBlex(ManagerBlex, int, Func{ActionContextBlex, bool})"/>.
+    /// </param>
     public static IServiceCollection AddBlexHistory(
         this IServiceCollection services,
         int maxEntries = 100,
-        ServiceLifetime lifetime = ServiceLifetime.Scoped)
+        ServiceLifetime lifetime = ServiceLifetime.Scoped,
+        Func<ActionContextBlex, bool>? filter = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.Add(new ServiceDescriptor(
             typeof(HistoryBlex),
-            sp => new HistoryBlex(sp.GetRequiredService<ManagerBlex>(), maxEntries),
+            sp => new HistoryBlex(sp.GetRequiredService<ManagerBlex>(), maxEntries, filter),
             lifetime));
         return services;
     }

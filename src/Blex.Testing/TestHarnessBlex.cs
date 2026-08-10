@@ -12,11 +12,19 @@ public sealed class TestHarnessBlex<TStore> : IDisposable
     where TStore : StoreBaseBlex
 {
     /// <summary>Creates a harness, registering <paramref name="store"/> with a fresh manager.</summary>
-    public TestHarnessBlex(TStore store)
+    public TestHarnessBlex(TStore store) : this(store, null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a harness whose manager runs <paramref name="middleware"/>, so a store can be tested
+    /// together with the veto filters and observers that wrap it in the real application.
+    /// </summary>
+    public TestHarnessBlex(TStore store, IEnumerable<IMiddlewareBlex>? middleware)
     {
         ArgumentNullException.ThrowIfNull(store);
         Store = store;
-        Manager = new ManagerBlex();
+        Manager = new ManagerBlex(middleware);
         Manager.Register(store);
         Log = Manager.RecordActions();
     }

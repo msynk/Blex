@@ -321,6 +321,16 @@ public abstract class StoreBaseBlex : IStoreBlex, INotifyPropertyChanged
         if (_initialState is null)
             return;
 
+        // A reset that changes nothing must record nothing -- the rule every other mutation path
+        // already follows (SetState with an equal value, a no-op adapter call). Without this, a
+        // "reset" button pressed on an untouched form would notify every subscriber, write to
+        // storage and push an undo entry for a mutation that never happened.
+        //
+        // Compared as text rather than with JsonNode.DeepEquals, which only exists from .NET 9:
+        // both trees come from the same generated SerializeState, so their property order matches.
+        if (SerializeState().ToJsonString() == _initialState.ToJsonString())
+            return;
+
         Dispatch("ResetState", () =>
         {
             DeserializeState((JsonObject)_initialState.DeepClone());

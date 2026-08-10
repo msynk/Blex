@@ -57,7 +57,7 @@ public sealed class ProviderBlex : ComponentBase, IAsyncDisposable
             var pcs = Services.GetService<PersistentComponentState>();
             if (pcs is not null)
             {
-                _componentState = new ComponentStatePersistenceBlex(pcs, Stores);
+                _componentState = new ComponentStatePersistenceBlex(pcs, Stores, Manager);
                 _componentState.TryRestore();
             }
         }

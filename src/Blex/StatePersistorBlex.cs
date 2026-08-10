@@ -25,10 +25,12 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
     // consistent in that case.
     private readonly Lock _saveGate = new();
     private Task _writeChain = Task.CompletedTask;
+    private Task _externalChain = Task.CompletedTask;
     private CancellationTokenSource? _debounce;
     private DateTimeOffset? _pendingSince;
     private bool _subscribed;
     private bool _suspended;
+    private bool _watching;
 
     /// <summary>Creates a persistor over a manager and storage sink.</summary>
     public StatePersistorBlex(ManagerBlex manager, IStorageBlex storage, PersistenceOptionsBlex? options = null)
@@ -56,7 +58,176 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
     /// </remarks>
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
+        if (!_options.SkipHydration)
+            await RehydrateAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!_subscribed)
+        {
+            _manager.ActionDispatched += OnAction;
+            _manager.StateRestored += OnStateRestored;
+            _subscribed = true;
+        }
+
+        await StartWatchingAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins applying state written by other instances (other tabs), when
+    /// <see cref="PersistenceOptionsBlex.SyncAcrossTabs"/> is on and the storage can report it.
+    /// </summary>
+    private async Task StartWatchingAsync(CancellationToken cancellationToken)
+    {
+        if (!_options.SyncAcrossTabs || _watching || _storage is not IExternalStorageChangeBlex watchable)
+            return;
+
+        _watching = true;
+        watchable.ExternalChange += OnExternalChange;
+        try
+        {
+            await watchable.StartWatchingAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Setting up the watch failed (interop unavailable during prerender, say). Roll back so
+            // a later StartAsync can try again rather than leaving a subscription that never fires.
+            watchable.ExternalChange -= OnExternalChange;
+            _watching = false;
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Applies state another instance wrote. Fired from the storage's own notification, so it must
+    /// not throw and must not schedule a save: the value came <em>from</em> storage, and writing it
+    /// straight back would bounce the change between tabs.
+    /// </summary>
+    private void OnExternalChange(string? key)
+    {
+        // Chained rather than fired off independently: two changes arriving in quick succession
+        // would otherwise race on their reads, and the older payload could land last.
+        lock (_saveGate)
+        {
+            _externalChain = ApplyExternalChangeAsync(_externalChain, key);
+        }
+    }
+
+    private async Task ApplyExternalChangeAsync(Task previous, string? key)
+    {
+        await previous.ConfigureAwait(true);
+        await ApplyExternalChangeAsync(key).ConfigureAwait(true);
+    }
+
+    private async Task ApplyExternalChangeAsync(string? key)
+    {
+        try
+        {
+            // A null key means the whole area changed (a wholesale clear), so re-read everything.
+            var target = key is null ? null : StoreNameFor(key);
+            if (key is not null && target is null)
+                return; // some other application's key sharing the same storage area
+
+            foreach (var store in _manager.Stores)
+            {
+                if (!store.Persist || store is not StoreBaseBlex sb)
+                    continue;
+                if (target is not null && store.Name != target)
+                    continue;
+
+                var raw = await _storage.GetAsync(KeyFor(store)).ConfigureAwait(true);
+
+                JsonObject? slice = null;
+                if (!string.IsNullOrEmpty(raw))
+                {
+                    try
+                    {
+                        slice = Unwrap(store.Name, raw);
+                    }
+                    catch (Exception ex)
+                    {
+                        _manager.ReportError("persistence", ex, $"external change for '{store.Name}'");
+                        continue;
+                    }
+                }
+
+                if (slice is null)
+                    continue;
+
+                // Suspended: applying is a restore, not an action, and echoing it back to storage
+                // would bounce the same value between tabs forever.
+                var wasSuspended = _suspended;
+                _suspended = true;
+                try
+                {
+                    sb.ApplyRestoredState(slice);
+                }
+                catch (Exception ex)
+                {
+                    _manager.ReportError("persistence", ex, $"applying external change to '{store.Name}'");
+                    continue;
+                }
+                finally
+                {
+                    _suspended = wasSuspended;
+                }
+
+                NotifyExternalChange(store.Name, slice);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Nothing awaits this task, so an escaping exception would surface as an unobserved one.
+            _manager.ReportError("persistence", ex, "external change");
+        }
+    }
+
+    /// <summary>Maps a storage key back to a store name, or <c>null</c> when it is not ours.</summary>
+    private string? StoreNameFor(string key)
+    {
+        var prefix = _options.KeyPrefix ?? "";
+        if (!key.StartsWith(prefix, StringComparison.Ordinal))
+            return null;
+
+        var name = key.Substring(prefix.Length);
+        foreach (var store in _manager.Stores)
+        {
+            if (store.Persist && store.Name == name)
+                return name;
+        }
+
+        return null;
+    }
+
+    private void NotifyExternalChange(string storeName, JsonObject state)
+    {
+        if (_options.OnExternalChange is not { } handler)
+            return;
+
+        try
+        {
+            handler(storeName, state);
+        }
+        catch (Exception ex)
+        {
+            _manager.ReportError("persistence", ex, $"external-change callback for '{storeName}'");
+        }
+    }
+
+    /// <summary>
+    /// Reads and applies persisted state for every persistent store, without changing whether the
+    /// persistor is listening for saves. <see cref="StartAsync"/> calls this unless
+    /// <see cref="PersistenceOptionsBlex.SkipHydration"/> is set; call it directly to hydrate later
+    /// (once the user, tenant or feature flags are known), or to re-read storage after an external
+    /// change. Safe to call more than once.
+    /// </summary>
+    /// <remarks>
+    /// Saving is suspended for the duration so rehydration does not immediately rewrite storage.
+    /// A corrupt or non-migratable payload is reported, discarded and skipped; exceptions from the
+    /// storage provider itself propagate so the host can retry later.
+    /// </remarks>
+    public async Task RehydrateAsync(CancellationToken cancellationToken = default)
+    {
         // Suspend saving while we restore so rehydration doesn't immediately rewrite storage.
+        var wasSuspended = _suspended;
         _suspended = true;
         try
         {
@@ -69,7 +240,10 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
                 // payload errors below are contained per store.
                 var raw = await _storage.GetAsync(KeyFor(store), cancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrEmpty(raw))
+                {
+                    NotifyRehydrated(store.Name, null);
                     continue;
+                }
 
                 JsonObject? slice = null;
                 try
@@ -84,7 +258,10 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
                 }
 
                 if (slice is null)
+                {
+                    NotifyRehydrated(store.Name, null);
                     continue;
+                }
 
                 try
                 {
@@ -96,18 +273,30 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
                     // itself is fine -- report, but keep the stored data.
                     _manager.ReportError("persistence", ex, $"applying '{store.Name}'");
                 }
+
+                NotifyRehydrated(store.Name, slice);
             }
         }
         finally
         {
-            _suspended = false;
+            _suspended = wasSuspended;
         }
+    }
 
-        if (!_subscribed)
+    /// <summary>Reports a store's rehydration outcome, containing a throwing callback.</summary>
+    private void NotifyRehydrated(string storeName, JsonObject? state)
+    {
+        if (_options.OnRehydrated is not { } handler)
+            return;
+
+        try
         {
-            _manager.ActionDispatched += OnAction;
-            _manager.StateRestored += OnStateRestored;
-            _subscribed = true;
+            handler(storeName, state);
+        }
+        catch (Exception ex)
+        {
+            // A user callback must not abort hydration for the stores behind it.
+            _manager.ReportError("persistence", ex, $"rehydrated callback for '{storeName}'");
         }
     }
 
@@ -284,7 +473,22 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
             string json;
             try
             {
-                json = Wrap(store.SerializeState());
+                var state = store.SerializeState();
+                if (_options.Partialize is { } partialize)
+                {
+                    // A null projection means "do not persist this store right now"; leave whatever
+                    // is already in storage alone rather than writing an empty payload over it.
+                    var projected = partialize(name, state);
+                    if (projected is null)
+                        continue;
+
+                    // Returning a nested node of the snapshot (state["Inner"]) is a natural thing
+                    // to write, but a JsonNode cannot be parented twice, so Wrap's envelope would
+                    // reject it. Detach first rather than making the caller remember.
+                    state = projected.Parent is null ? projected : (JsonObject)projected.DeepClone();
+                }
+
+                json = Wrap(state);
             }
             catch (Exception ex)
             {
@@ -316,12 +520,23 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
     /// </summary>
     public Task FlushAsync()
     {
+        Task writes;
+        Task external;
         lock (_saveGate)
         {
             CancelDebounceLocked();
             SavePendingLocked();
-            return _writeChain;
+            writes = _writeChain;
+
+            // Incoming cross-tab changes are part of "settle everything in flight" too: without
+            // this, a test (or a page about to navigate away) could observe a change that has been
+            // reported but not yet applied.
+            external = _externalChain;
         }
+
+        return writes.IsCompletedSuccessfully && external.IsCompletedSuccessfully
+            ? Task.CompletedTask
+            : Task.WhenAll(writes, external);
     }
 
     /// <summary>Removes every persistent store's saved slice from storage.</summary>
@@ -346,6 +561,12 @@ public sealed class StatePersistorBlex : IAsyncDisposable, IDisposable
 
     private void Unsubscribe()
     {
+        if (_watching && _storage is IExternalStorageChangeBlex watchable)
+        {
+            watchable.ExternalChange -= OnExternalChange;
+            _watching = false;
+        }
+
         if (!_subscribed)
             return;
 

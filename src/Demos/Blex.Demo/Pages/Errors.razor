@@ -38,8 +38,11 @@
                 <tr><td><code>middleware</code></td><td>A middleware's <code>BeforeAction</code> or <code>OnAction</code> threw. The pipeline continues with the next middleware.</td></tr>
                 <tr><td><code>persistence</code></td><td>Rehydrating, applying, serializing, scheduling or writing a persisted slice failed. <code>Detail</code> names the store or key.</td></tr>
                 <tr><td><code>restore</code></td><td>A store's slice could not be deserialized during <code>RestoreGlobalState</code>. That store is skipped; the others still restore.</td></tr>
-                <tr><td><code>devtools</code></td><td>A time-travel snapshot from the extension was malformed, or a sanitizer threw.</td></tr>
-                <tr><td><code>history</code></td><td>A <code>HistoryBlex.Changed</code> handler threw while recording or after an external restore.</td></tr>
+                <tr><td><code>devtools</code></td><td>A time-travel snapshot from the extension was malformed, a sanitizer threw, or the JS bridge failed to load or send.</td></tr>
+                <tr><td><code>history</code></td><td>A <code>HistoryBlex.Changed</code> handler threw while recording or after an external restore, or a history filter threw.</td></tr>
+                <tr><td><code>reset</code></td><td>A store failed to reset during <code>ManagerBlex.ResetAll()</code>. That store is skipped; the rest still reset.</td></tr>
+                <tr><td><code>register</code></td><td>Two stores were registered under the same name, so their state slices, DevTools entries and storage keys collide.</td></tr>
+                <tr><td><code>prerender</code></td><td>Handing a store's state across the prerender-to-interactive boundary failed. The store simply renders from its own state instead - the worst case is rendering twice.</td></tr>
             </tbody>
         </table>
     </div>
@@ -168,7 +171,7 @@
 
     private static readonly IReadOnlyList<ApiTable.Row> ErrorRows =
     [
-        new("string Source", "Which part of the pipeline failed: <code>subscriber</code>, <code>async reactor</code>, <code>middleware</code>, <code>persistence</code>, <code>restore</code>, <code>devtools</code> or <code>history</code>."),
+        new("string Source", "Which part of the pipeline failed: <code>subscriber</code>, <code>async reactor</code>, <code>middleware</code>, <code>persistence</code>, <code>restore</code>, <code>devtools</code>, <code>history</code>, <code>reset</code>, <code>register</code> or <code>prerender</code>."),
         new("Exception Exception", "The captured exception."),
         new("string? Detail", "Context - usually the store name, storage key or qualified action name."),
     ];

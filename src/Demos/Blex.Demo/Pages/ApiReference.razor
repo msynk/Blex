@@ -118,7 +118,7 @@
         new("StateAttributeBlex", "Marks a field as reactive state. See <a href=\"stores\">Stores &amp; state</a>."),
         new("ComputedAttributeBlex", "Marks a parameterless <code>ComputeXxx()</code>/<code>GetXxx()</code> method as memoized derived state. See <a href=\"computed\">Computed state</a>."),
         new("ActionAttributeBlex", "Marks an <code>OnXxx</code> method as an action. Property: <code>Name</code>. See <a href=\"actions\">Actions</a>."),
-        new("EffectAttributeBlex", "Marks an async <code>OnXxx</code> method as an effect. Properties: <code>Name</code>, <code>Concurrency</code>. See <a href=\"effects\">Effects</a>."),
+        new("EffectAttributeBlex", "Marks an async <code>OnXxx</code> method as an effect. Properties: <code>Name</code>, <code>Concurrency</code>, <code>DebounceMilliseconds</code>. See <a href=\"effects\">Effects</a>."),
         new("EffectConcurrencyBlex", "Enum: <code>Parallel</code>, <code>Latest</code>, <code>Drop</code>, <code>Queue</code>. See <a href=\"effects\">Effects</a>."),
     ];
 
@@ -126,7 +126,7 @@
     [
         new("IStoreBlex", "The store contract: <code>Name</code>, <code>Persist</code>, <code>StateChanged</code>, <code>SerializeState()</code>, <code>DeserializeState()</code>."),
         new("StoreBaseBlex", "Base class for every store. Change notification, batched dispatch, <code>Batch</code>, <code>ResetState</code>, <code>RestoreState</code> and the protected hooks the generator uses."),
-        new("ManagerBlex", "The central manager: store registry, middleware pipeline, action subscriptions, global state capture and restore, DevTools connection, error sink. See <a href=\"cross-store\">Cross-store coordination</a>."),
+        new("ManagerBlex", "The central manager: store registry, middleware pipeline, action subscriptions, global state capture and restore, <code>ResetAll</code>, DevTools connection, error sink. See <a href=\"cross-store\">Cross-store coordination</a>."),
         new("ActionContextBlex", "What observers receive after an action: <code>Store</code>, <code>ActionName</code>, <code>QualifiedName</code>, <code>Args</code>, <code>Sequence</code>, <code>Timestamp</code>, <code>GlobalState</code>."),
         new("PreActionContextBlex", "What middleware receives before an action, plus <code>IsCancelled</code> and <code>Cancel()</code>."),
         new("ActionArgBlex", "<code>readonly record struct (string Name, object? Value)</code> - one captured action argument."),
@@ -152,13 +152,14 @@
     private static readonly IReadOnlyList<ApiTable.Row> PersistenceTypes =
     [
         new("IStorageBlex", "Async key/value sink: <code>GetAsync</code>, <code>SetAsync</code>, <code>RemoveAsync</code>."),
-        new("PersistenceOptionsBlex", "<code>KeyPrefix</code>, <code>DebounceInterval</code>, <code>DebounceMaxDelay</code>, <code>Version</code>, <code>Migrate</code>."),
+        new("IExternalStorageChangeBlex", "Optional companion to <code>IStorageBlex</code>: reports keys written by another instance (another tab), enabling <code>SyncAcrossTabs</code>."),
+        new("PersistenceOptionsBlex", "<code>KeyPrefix</code>, <code>DebounceInterval</code>, <code>DebounceMaxDelay</code>, <code>Version</code>, <code>Migrate</code>, <code>Partialize</code>, <code>OnRehydrated</code>, <code>SkipHydration</code>."),
         new("StatePersistorBlex", "The coordinator: <code>StartAsync</code>, <code>FlushAsync</code>, <code>ClearAsync</code>, <code>DisposeAsync</code>. See <a href=\"persistence\">Persistence</a>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> HistoryTypes =
     [
-        new("HistoryBlex", "In-app undo/redo over the global state tree. See <a href=\"history\">Undo &amp; redo</a>."),
+        new("HistoryBlex", "In-app undo/redo over the global state tree, with an optional filter deciding which actions earn their own step. See <a href=\"history\">Undo &amp; redo</a>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> Extensions =
@@ -171,7 +172,7 @@
     [
         new("ProviderBlex", "Root component: registers stores, restores prerendered and persisted state, starts history, connects DevTools. Parameters: <code>EnableDevTools</code>, <code>PersistComponentState</code>, <code>ChildContent</code>."),
         new("ComponentBaseBlex", "Optional component base with <code>Subscribe</code>, selector <code>Subscribe</code>, <code>OwnsSubscription</code> and a <code>Dispose(bool)</code> hook."),
-        new("BrowserStorageBlex", "<code>IStorageBlex</code> over <code>localStorage</code>/<code>sessionStorage</code> through a small JS module."),
+        new("BrowserStorageBlex", "<code>IStorageBlex</code> over <code>localStorage</code>/<code>sessionStorage</code> through a small JS module. Also implements <code>IExternalStorageChangeBlex</code> via the browser's <code>storage</code> event, which powers <code>SyncAcrossTabs</code>."),
         new("BrowserStorageKindBlex", "Enum: <code>Local</code>, <code>Session</code>."),
         new("PersistenceServiceCollectionExtensionsBlex", "<code>AddBlexLocalStoragePersistence</code>, <code>AddBlexSessionStoragePersistence</code>."),
         new("ComponentStatePersistenceBlex", "Bridges stores to Blazor's <code>PersistentComponentState</code> for the prerender-to-interactive handoff."),

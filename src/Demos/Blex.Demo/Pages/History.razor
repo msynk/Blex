@@ -27,8 +27,10 @@
             <button class="btn btn-primary" @onclick="HistoryStack.Redo" disabled="@(!HistoryStack.CanRedo)">
                 ↷ Redo @HistoryStack.NextRedoLabel
             </button>
+            <button class="btn" title="HistoryBlex.Checkpoint(...)" @onclick="Checkpoint">Checkpoint</button>
             <button class="btn btn-ghost" @onclick="HistoryStack.Clear">Clear history</button>
         </div>
+        <p class="small muted" style="margin-top:0.4rem;margin-bottom:0">@_checkpointNote</p>
 
         <div class="readout" style="margin-top:0.8rem">
             <div class="readout__item">
@@ -108,6 +110,47 @@
         </p>
     </Callout>
 
+    <h2>Choosing what earns an undo step</h2>
+    <p>
+        By default every action becomes its own step. That is rarely what a user means by "undo" once
+        a text box is involved: typing "hello" into a <code>@@bind</code>-ed property records five
+        actions, so undo walks back one letter at a time. Pass a <em>filter</em> - a predicate over
+        the action context - to decide which actions get their own step. It is the same idea as
+        redux-undo's <code>filter</code>.
+    </p>
+    <CodeBlock Code="@Filter" Title="Registration" />
+
+    <p>
+        A filtered action still applies, and it still moves the present forward. It simply does not
+        become a separate step, so the next undo reverts it <em>together with</em> the recorded action
+        before it. That is what keeps undo landing on states the user recognizes: never on a
+        half-typed word, and never on a state they never saw.
+    </p>
+    <CodeBlock Code="@FilterSemantics" Title="What the user experiences" Compact="true" />
+
+    <Callout Kind="Callout.CalloutKind.Note" Title="The filter fails open">
+        <p style="margin-bottom:0">
+            If the predicate throws, the action is recorded anyway and the exception is reported
+            through <code>OnError</code> with source <code>"history"</code>. Keeping an extra undo
+            step is a smaller failure than silently losing one the user is about to reach for.
+        </p>
+    </Callout>
+
+    <h3>Marking your own boundaries</h3>
+    <p>
+        A filter alone leaves the filtered work with no boundary of its own, so the next recorded
+        action swallows it: undo would discard the whole typed edit <em>and</em> the button press
+        after it. <code>Checkpoint(label)</code> commits the current state as an undo step on demand
+        - call it where the user would expect a boundary: a pause in typing, a field losing focus, a
+        wizard step completing.
+    </p>
+    <CodeBlock Code="@CheckpointSource" Title="Debounced boundaries" Compact="true" />
+
+    <p>
+        Consecutive checkpoints with nothing in between collapse into one, so a "user stopped
+        typing" timer can call it freely without growing the stack while the state sits still.
+    </p>
+
     <h2>Scoping history to one store</h2>
     <p>
         <code>HistoryBlex</code> is deliberately global: it snapshots the whole tree, which is what
@@ -139,6 +182,18 @@
 
     private void AddContact() => Contacts.Add($"New Person {++_added}", "Runtime");
 
+    private string _checkpointNote = "";
+
+    private void Checkpoint()
+    {
+        var before = HistoryStack.UndoCount;
+        HistoryStack.Checkpoint("Checkpoint");
+
+        _checkpointNote = HistoryStack.UndoCount == before
+            ? "Nothing has changed since the last boundary, so the checkpoint added no step."
+            : "Committed the current state as an undo step.";
+    }
+
     protected override void Dispose(bool disposing) => HistoryStack.Changed -= OnHistoryChanged;
 
     private static readonly IReadOnlyList<ApiTable.Row> HistoryRows =
@@ -146,6 +201,7 @@
         new("void Start()", "Captures the baseline and begins recording. Idempotent. Called by <code>&lt;ProviderBlex&gt;</code> after rehydration."),
         new("void Undo()", "Restores the previous state. No-op when <code>CanUndo</code> is false."),
         new("void Redo()", "Re-applies the most recently undone state. No-op when <code>CanRedo</code> is false."),
+        new("void Checkpoint(string? label = null)", "Commits the current state as an undo step, labelled <code>label</code> (default <code>\"Checkpoint\"</code>). Pairs with a filter: the filter keeps noise out, this marks the boundaries. A checkpoint on unchanged state adds nothing."),
         new("void Clear()", "Drops both stacks and takes the current state as the new baseline."),
         new("bool CanUndo / CanRedo", "Whether there is anything to step to. Bind to a button's <code>disabled</code>."),
         new("int UndoCount / RedoCount", "Stack depths."),
@@ -194,6 +250,45 @@
         <button @onclick="History.Undo" disabled="@(!History.CanUndo)">
             Undo @History.NextUndoLabel      @* e.g. "Undo counter/Increment" *@
         </button>
+        """;
+
+    private const string Filter = """
+        // Direct property assignments record as "Set X" -- typically one per keystroke.
+        // Skip them so undo steps between deliberate actions instead.
+        builder.Services.AddBlexHistory(
+            maxEntries: 100,
+            filter: ctx => !ctx.ActionName.StartsWith("Set "));
+
+        // Or exempt a whole store whose churn is noise (telemetry, live cursor position):
+        builder.Services.AddBlexHistory(filter: ctx => ctx.Store.Name != "presence");
+        """;
+
+    private const string FilterSemantics = """
+        // filter: ctx => ctx.ActionName != "Add"
+
+        counter.Increment();   // recorded -> 1
+        counter.Add(10);       // filtered -> 11   (applies, but no new step)
+        counter.Increment();   // recorded -> 12
+
+        History.Undo();        // -> 11, not 1: the step holds the post-filter state
+        """;
+
+    private const string CheckpointSource = """
+        // Registration: keystroke-level writes never get their own step...
+        builder.Services.AddBlexHistory(filter: ctx => !ctx.ActionName.StartsWith("Set "));
+
+        // ...so the component marks the boundaries instead.
+        @inject HistoryBlex History
+
+        private void OnBlur() => History.Checkpoint("Edit title");
+
+        // Or on a pause in typing, via a debounced effect:
+        [EffectAttributeBlex(DebounceMilliseconds = 500)]
+        private async Task OnSettled()
+        {
+            await Task.CompletedTask;
+            _history.Checkpoint("Edit");
+        }
         """;
 
     private const string PerStore = """
