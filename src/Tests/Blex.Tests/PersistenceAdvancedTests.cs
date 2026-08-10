@@ -9,7 +9,7 @@ namespace Blex.Tests;
 
 public class PersistenceAdvancedTests
 {
-    private sealed class InMemoryStorage : IStorageBlex
+    private sealed class InMemoryStorage : IBlexStorage
     {
         public Dictionary<string, string> Data { get; } = new();
 
@@ -29,10 +29,10 @@ public class PersistenceAdvancedTests
         }
     }
 
-    private static (SettingsStore Store, ManagerBlex Manager, InMemoryStorage Storage) Setup()
+    private static (SettingsStore Store, BlexManager Manager, InMemoryStorage Storage) Setup()
     {
         var store = new SettingsStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         return (store, manager, new InMemoryStorage());
     }
@@ -42,10 +42,10 @@ public class PersistenceAdvancedTests
     {
         var (store, manager, storage) = Setup();
         storage.Data["blex:settings"] = "{not valid json!!";
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
-        await using var persistor = new StatePersistorBlex(manager, storage);
+        await using var persistor = new BlexStatePersistor(manager, storage);
         await persistor.StartAsync(); // must not throw
 
         Assert.Equal("light", store.Theme); // defaults kept
@@ -59,13 +59,13 @@ public class PersistenceAdvancedTests
     {
         var (store, manager, storage) = Setup();
         storage.Data["blex:settings"] = """{"Theme":"dark","FontSize":16}""";
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         // The payload is valid; only a UI subscriber misbehaves during the restore notification.
         store.StateChanged += () => throw new InvalidOperationException("render boom");
 
-        await using var persistor = new StatePersistorBlex(manager, storage);
+        await using var persistor = new BlexStatePersistor(manager, storage);
         await persistor.StartAsync(); // must not throw
 
         Assert.Equal("dark", store.Theme); // state applied
@@ -80,9 +80,9 @@ public class PersistenceAdvancedTests
     public async Task VersionedPayload_RoundTrips_InEnvelope()
     {
         var (store, manager, storage) = Setup();
-        var options = new PersistenceOptionsBlex { Version = 2 };
+        var options = new BlexPersistenceOptions { Version = 2 };
 
-        await using (var persistor = new StatePersistorBlex(manager, storage, options))
+        await using (var persistor = new BlexStatePersistor(manager, storage, options))
         {
             await persistor.StartAsync();
             store.SetTheme("dark");
@@ -94,9 +94,9 @@ public class PersistenceAdvancedTests
         Assert.Equal("dark", stored["state"]!["Theme"]!.GetValue<string>());
 
         // A fresh app instance rehydrates from the envelope.
-        var (store2, manager2, _) = (new SettingsStore(), new ManagerBlex(), 0);
+        var (store2, manager2, _) = (new SettingsStore(), new BlexManager(), 0);
         manager2.Register(store2);
-        await using var persistor2 = new StatePersistorBlex(manager2, storage, new PersistenceOptionsBlex { Version = 2 });
+        await using var persistor2 = new BlexStatePersistor(manager2, storage, new BlexPersistenceOptions { Version = 2 });
         await persistor2.StartAsync();
         Assert.Equal("dark", store2.Theme);
     }
@@ -108,7 +108,7 @@ public class PersistenceAdvancedTests
         // Legacy (v0, unversioned) payload with an obsolete theme name.
         storage.Data["blex:settings"] = """{"Theme":"classic","FontSize":11}""";
 
-        var options = new PersistenceOptionsBlex
+        var options = new BlexPersistenceOptions
         {
             Version = 1,
             Migrate = (storeName, fromVersion, state) =>
@@ -120,7 +120,7 @@ public class PersistenceAdvancedTests
             },
         };
 
-        await using var persistor = new StatePersistorBlex(manager, storage, options);
+        await using var persistor = new BlexStatePersistor(manager, storage, options);
         await persistor.StartAsync();
 
         Assert.Equal("light", store.Theme);
@@ -133,7 +133,7 @@ public class PersistenceAdvancedTests
         var (store, manager, storage) = Setup();
         storage.Data["blex:settings"] = """{"Theme":"ancient"}""";
 
-        await using var persistor = new StatePersistorBlex(manager, storage, new PersistenceOptionsBlex { Version = 3 });
+        await using var persistor = new BlexStatePersistor(manager, storage, new BlexPersistenceOptions { Version = 3 });
         await persistor.StartAsync();
 
         Assert.Equal("light", store.Theme); // discarded -> defaults
@@ -145,9 +145,9 @@ public class PersistenceAdvancedTests
         var (store, manager, storage) = Setup();
         var writes = 0;
         var counting = new CountingStorage(storage, () => writes++);
-        var options = new PersistenceOptionsBlex { DebounceInterval = TimeSpan.FromMilliseconds(50) };
+        var options = new BlexPersistenceOptions { DebounceInterval = TimeSpan.FromMilliseconds(50) };
 
-        await using var persistor = new StatePersistorBlex(manager, counting, options);
+        await using var persistor = new BlexStatePersistor(manager, counting, options);
         await persistor.StartAsync();
 
         store.SetTheme("a");
@@ -164,9 +164,9 @@ public class PersistenceAdvancedTests
     public async Task DisposeAsync_FlushesPendingDebouncedWrites()
     {
         var (store, manager, storage) = Setup();
-        var options = new PersistenceOptionsBlex { DebounceInterval = TimeSpan.FromMinutes(5) };
+        var options = new BlexPersistenceOptions { DebounceInterval = TimeSpan.FromMinutes(5) };
 
-        var persistor = new StatePersistorBlex(manager, storage, options);
+        var persistor = new BlexStatePersistor(manager, storage, options);
         await persistor.StartAsync();
         store.SetTheme("dark");
         Assert.False(storage.Data.ContainsKey("blex:settings"));
@@ -179,10 +179,10 @@ public class PersistenceAdvancedTests
     public async Task RestoredState_IsWrittenBackToStorage()
     {
         var (store, manager, storage) = Setup();
-        var history = new HistoryBlex(manager);
+        var history = new BlexHistory(manager);
         history.Start();
 
-        await using var persistor = new StatePersistorBlex(manager, storage);
+        await using var persistor = new BlexStatePersistor(manager, storage);
         await persistor.StartAsync();
 
         store.SetTheme("dark");
@@ -197,7 +197,7 @@ public class PersistenceAdvancedTests
         Assert.Contains("light", storage.Data["blex:settings"]);
     }
 
-    private sealed class CountingStorage(IStorageBlex inner, Action onWrite) : IStorageBlex
+    private sealed class CountingStorage(IBlexStorage inner, Action onWrite) : IBlexStorage
     {
         public ValueTask<string?> GetAsync(string key, CancellationToken ct = default) => inner.GetAsync(key, ct);
 

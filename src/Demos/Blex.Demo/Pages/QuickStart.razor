@@ -1,5 +1,5 @@
 @page "/quick-start"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject CounterStore Counter
 
 <DocPage Href="quick-start" Title="Quick start"
@@ -7,8 +7,8 @@
 
     <h2>1. Write the store</h2>
     <p>
-        A store is a <code>partial class</code> marked <code>[StoreAttributeBlex]</code>. Fields marked
-        <code>[StateAttributeBlex]</code> become reactive properties; methods marked <code>[ActionAttributeBlex]</code> become
+        A store is a <code>partial class</code> marked <code>[BlexStoreAttribute]</code>. Fields marked
+        <code>[BlexStateAttribute]</code> become reactive properties; methods marked <code>[BlexActionAttribute]</code> become
         public wrappers that record a single named action.
     </p>
 
@@ -19,10 +19,10 @@
         <table>
             <thead><tr><th>You write</th><th>You get</th><th>Rule</th></tr></thead>
             <tbody>
-                <tr><td><code>[StateAttributeBlex] private int _count;</code></td><td><code>public int Count { get; set; }</code></td><td>Strip a leading underscore, capitalize.</td></tr>
-                <tr><td><code>[ComputedAttributeBlex] int ComputeDoubleCount()</code></td><td><code>public int DoubleCount { get; }</code></td><td>Strip <code>Compute</code> or <code>Get</code>.</td></tr>
-                <tr><td><code>[ActionAttributeBlex] void OnIncrement()</code></td><td><code>public void Increment()</code></td><td>Strip the <code>On</code> prefix.</td></tr>
-                <tr><td><code>[EffectAttributeBlex] async Task OnLoad()</code></td><td><code>public Task Load()</code> + <code>LoadIsLoading</code> + <code>LoadError</code></td><td>Strip <code>On</code>, add the lifecycle.</td></tr>
+                <tr><td><code>[BlexStateAttribute] private int _count;</code></td><td><code>public int Count { get; set; }</code></td><td>Strip a leading underscore, capitalize.</td></tr>
+                <tr><td><code>[BlexComputedAttribute] int ComputeDoubleCount()</code></td><td><code>public int DoubleCount { get; }</code></td><td>Strip <code>Compute</code> or <code>Get</code>.</td></tr>
+                <tr><td><code>[BlexActionAttribute] void OnIncrement()</code></td><td><code>public void Increment()</code></td><td>Strip the <code>On</code> prefix.</td></tr>
+                <tr><td><code>[BlexEffectAttribute] async Task OnLoad()</code></td><td><code>public Task Load()</code> + <code>LoadIsLoading</code> + <code>LoadError</code></td><td>Strip <code>On</code>, add the lifecycle.</td></tr>
             </tbody>
         </table>
     </div>
@@ -35,7 +35,7 @@
     <CodeBlock Code="@Step4" Language="razor" FileName="Pages/Counter.razor" />
 
     <p>
-        <code>ComponentBaseBlex.Subscribe(store)</code> re-renders the component whenever that
+        <code>BlexComponentBase.Subscribe(store)</code> re-renders the component whenever that
         store changes, and detaches automatically when the component is disposed. That is the whole
         integration - there is no <code>StateHasChanged</code> to call and nothing to unsubscribe.
     </p>
@@ -113,17 +113,17 @@
 
         namespace MyApp.Stores;
 
-        [StoreAttributeBlex(Name = "counter")]
+        [BlexStoreAttribute(Name = "counter")]
         public partial class CounterStore
         {
-            [StateAttributeBlex] private int _count;
-            [StateAttributeBlex] private int _step = 1;
+            [BlexStateAttribute] private int _count;
+            [BlexStateAttribute] private int _step = 1;
 
-            [ComputedAttributeBlex] private int  ComputeDoubleCount() => Count * 2;
-            [ComputedAttributeBlex] private bool ComputeIsEven()      => Count % 2 == 0;
+            [BlexComputedAttribute] private int  ComputeDoubleCount() => Count * 2;
+            [BlexComputedAttribute] private bool ComputeIsEven()      => Count % 2 == 0;
 
-            [ActionAttributeBlex] private void OnIncrement() => Count += Step;
-            [ActionAttributeBlex] private void OnDecrement() => Count -= Step;
+            [BlexActionAttribute] private void OnIncrement() => Count += Step;
+            [BlexActionAttribute] private void OnDecrement() => Count -= Step;
         }
         """;
 
@@ -133,19 +133,19 @@
         """;
 
     private const string Step3 = """
-        <ProviderBlex>
+        <BlexProvider>
             <Router AppAssembly="@typeof(App).Assembly">
                 <Found Context="routeData">
                     <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
                 </Found>
                 <NotFound><p>Not found.</p></NotFound>
             </Router>
-        </ProviderBlex>
+        </BlexProvider>
         """;
 
     private const string Step4 = """
         @page "/counter"
-        @inherits ComponentBaseBlex
+        @inherits BlexComponentBase
         @inject CounterStore Counter
 
         <p>Count: @Counter.Count (double: @Counter.DoubleCount)</p>

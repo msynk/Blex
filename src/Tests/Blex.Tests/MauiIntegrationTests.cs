@@ -39,7 +39,7 @@ public class MauiIntegrationTests
         services.AddBlexStore<SettingsStore>();
         if (history)
             services.AddBlexHistory();
-        services.AddScoped<IStorageBlex>(_ => new PreferencesStorageBlex(preferences));
+        services.AddScoped<IBlexStorage>(_ => new BlexPreferencesStorage(preferences));
         services.AddBlexPreferencesPersistence();
         return services.BuildServiceProvider();
     }
@@ -61,7 +61,7 @@ public class MauiIntegrationTests
         services.AddBlexStore<SettingsStore>(ServiceLifetime.Singleton);
         services.AddBlexHistory(lifetime: ServiceLifetime.Singleton);
         services.AddScoped(_ => new FakePreferences());
-        services.AddSingleton<IStorageBlex>(new PreferencesStorageBlex(new FakePreferences()));
+        services.AddSingleton<IBlexStorage>(new BlexPreferencesStorage(new FakePreferences()));
         services.AddBlexPreferencesPersistence(lifetime: ServiceLifetime.Singleton);
 
         using var provider = services.BuildServiceProvider(
@@ -82,7 +82,7 @@ public class MauiIntegrationTests
         var services = new ServiceCollection();
         services.AddBlex(lifetime: ServiceLifetime.Singleton);
         services.AddBlexStore<SettingsStore>(ServiceLifetime.Singleton);
-        services.AddSingleton<IStorageBlex>(new PreferencesStorageBlex(preferences));
+        services.AddSingleton<IBlexStorage>(new BlexPreferencesStorage(preferences));
         services.AddBlexPreferencesPersistence(lifetime: ServiceLifetime.Singleton);
 
         var provider = services.BuildServiceProvider();
@@ -100,7 +100,7 @@ public class MauiIntegrationTests
     {
         // The legacy (core, scoped) wiring is still rejected by ValidateScopes. Startup must
         // survive it with an actionable report instead of taking the app down.
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         var services = new ServiceCollection();
         services.AddBlex(options => options.OnError = errors.Add, ServiceLifetime.Singleton);
         services.AddBlexStore<SettingsStore>(); // scoped: the mismatch under test
@@ -116,7 +116,7 @@ public class MauiIntegrationTests
     [Fact]
     public async Task PreferencesStorage_RoundTrips()
     {
-        var storage = new PreferencesStorageBlex(new FakePreferences());
+        var storage = new BlexPreferencesStorage(new FakePreferences());
 
         Assert.Null(await storage.GetAsync("k"));
 
@@ -149,7 +149,7 @@ public class MauiIntegrationTests
         RunInitializers(provider);
 
         provider.GetRequiredService<SettingsStore>().SetTheme("blue");
-        await provider.GetRequiredService<StatePersistorBlex>().FlushAsync();
+        await provider.GetRequiredService<BlexStatePersistor>().FlushAsync();
 
         Assert.Contains("blue", (string)preferences.Data["blex:settings"]!);
     }
@@ -164,7 +164,7 @@ public class MauiIntegrationTests
         RunInitializers(provider);
 
         var settings = provider.GetRequiredService<SettingsStore>();
-        var historian = provider.GetRequiredService<HistoryBlex>();
+        var historian = provider.GetRequiredService<BlexHistory>();
         Assert.False(historian.CanUndo);
 
         settings.SetTheme("light");
@@ -192,14 +192,14 @@ public class MauiIntegrationTests
     public async Task Initializer_UnreadableStorage_DoesNotThrow_AndReportsError()
     {
         var preferences = new FakePreferences();
-        // A non-string value makes PreferencesStorageBlex's Get<string?> cast throw.
+        // A non-string value makes BlexPreferencesStorage's Get<string?> cast throw.
         preferences.Data["blex:settings"] = 42;
 
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         var services = new ServiceCollection();
         services.AddBlex(options => options.OnError = errors.Add);
         services.AddBlexStore<SettingsStore>();
-        services.AddScoped<IStorageBlex>(_ => new PreferencesStorageBlex(preferences));
+        services.AddScoped<IBlexStorage>(_ => new BlexPreferencesStorage(preferences));
         services.AddBlexPreferencesPersistence();
 
         await using var provider = services.BuildServiceProvider();

@@ -1,5 +1,5 @@
 @page "/"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject CounterStore Counter
 
 <PageTitle>Blex · Reactive state management for Blazor</PageTitle>
@@ -10,7 +10,7 @@
         <h1>State management that gets out of the way</h1>
         <p class="hero__lead">
             Blex is a lightweight, source-generator-powered state library for Blazor. You write one
-            <code>[StateAttributeBlex]</code> field and one <code>[ActionAttributeBlex]</code> method; the generator writes the
+            <code>[BlexStateAttribute]</code> field and one <code>[BlexActionAttribute]</code> method; the generator writes the
             reactive properties, the dispatch plumbing, the JSON snapshots and the loading/error
             lifecycle. Redux DevTools time-travel is built in.
         </p>
@@ -35,7 +35,7 @@
         <li>memoized <code>DoubleCount</code> / <code>IsEven</code> accessors that invalidate themselves on every state change,</li>
         <li>public <code>Increment()</code>, <code>Decrement()</code> and <code>SetStep(int)</code> wrappers that batch their mutations into one named, recorded action,</li>
         <li><code>SerializeState()</code> / <code>DeserializeState()</code> for snapshots, persistence and time-travel,</li>
-        <li>and the <code>StoreBaseBlex</code> base type itself.</li>
+        <li>and the <code>BlexStoreBase</code> base type itself.</li>
     </ul>
 
     <DemoCard Title="That store, running right now"
@@ -87,18 +87,18 @@
                 <tr><th>Task</th><th>Fluxor</th><th>Blex</th></tr>
             </thead>
             <tbody>
-                <tr><td>Define a piece of state</td><td>Feature + State class</td><td>one <code>[StateAttributeBlex]</code> field</td></tr>
-                <tr><td>Define an action</td><td>Action class + Reducer method</td><td>one <code>[ActionAttributeBlex]</code> method</td></tr>
+                <tr><td>Define a piece of state</td><td>Feature + State class</td><td>one <code>[BlexStateAttribute]</code> field</td></tr>
+                <tr><td>Define an action</td><td>Action class + Reducer method</td><td>one <code>[BlexActionAttribute]</code> method</td></tr>
                 <tr><td>Action payloads in DevTools / middleware</td><td>manual</td><td>automatic (<code>ctx.Args</code>)</td></tr>
-                <tr><td>Derived state</td><td>manual selectors</td><td><code>[ComputedAttributeBlex]</code>, memoized</td></tr>
-                <tr><td>Async side-effects</td><td>Effect classes</td><td><code>[EffectAttributeBlex]</code> with generated loading/error</td></tr>
+                <tr><td>Derived state</td><td>manual selectors</td><td><code>[BlexComputedAttribute]</code>, memoized</td></tr>
+                <tr><td>Async side-effects</td><td>Effect classes</td><td><code>[BlexEffectAttribute]</code> with generated loading/error</td></tr>
                 <tr><td>Effect cancellation &amp; concurrency</td><td>manual</td><td><code>CancellationToken</code> + <code>Latest</code>/<code>Drop</code>/<code>Queue</code></td></tr>
                 <tr><td>Ad-hoc batched mutations</td><td class="check-no">✗</td><td><code>store.Batch(name, …)</code></td></tr>
                 <tr><td>Reset to initial state</td><td>manual</td><td><code>store.ResetState()</code></td></tr>
                 <tr><td>Granular re-render</td><td>manual selectors</td><td>selector <code>Subscribe(…)</code></td></tr>
-                <tr><td>Normalized collections</td><td>manual</td><td><code>EntityAdapterBlex</code> / <code>EntityStateBlex</code></td></tr>
+                <tr><td>Normalized collections</td><td>manual</td><td><code>BlexEntityAdapter</code> / <code>BlexEntityState</code></td></tr>
                 <tr><td>Persistence</td><td>3rd-party</td><td>built in, with debounce + migrations</td></tr>
-                <tr><td>Undo / redo</td><td class="check-no">✗</td><td><code>HistoryBlex</code></td></tr>
+                <tr><td>Undo / redo</td><td class="check-no">✗</td><td><code>BlexHistory</code></td></tr>
                 <tr><td>Redux DevTools time-travel</td><td class="check-no">✗</td><td class="check-yes">✓ built in</td></tr>
                 <tr><td>Test helpers</td><td class="check-no">✗</td><td><code>Blex.Testing</code> harness</td></tr>
                 <tr><td>Boilerplate</td><td>high</td><td>generated away</td></tr>
@@ -143,30 +143,30 @@
 
     private static readonly IReadOnlyList<ApiTable.Row> Packages =
     [
-        new("Blex", "The core runtime: <code>StoreBaseBlex</code>, attributes, dispatch, middleware, persistence, entity adapter, undo/redo and <code>ManagerBlex</code>. No JS dependency. Referencing it also brings the source generator."),
-        new("Blex.Blazor", "Blazor integration: <code>&lt;ProviderBlex&gt;</code>, <code>ComponentBaseBlex</code>, browser-storage persistence and the Redux DevTools bridge."),
+        new("Blex", "The core runtime: <code>BlexStoreBase</code>, attributes, dispatch, middleware, persistence, entity adapter, undo/redo and <code>BlexManager</code>. No JS dependency. Referencing it also brings the source generator."),
+        new("Blex.Blazor", "Blazor integration: <code>&lt;BlexProvider&gt;</code>, <code>BlexComponentBase</code>, browser-storage persistence and the Redux DevTools bridge."),
         new("Blex.Generators", "The Roslyn incremental generator. Packed inside <code>Blex</code>, so you rarely reference it directly."),
-        new("Blex.Testing", "Test harness and assertions: <code>TestHarnessBlex</code>, <code>ActionLogBlex</code>, <code>WaitForAsync</code>."),
+        new("Blex.Testing", "Test harness and assertions: <code>BlexTestHarness</code>, <code>BlexActionLog</code>, <code>WaitForAsync</code>."),
     ];
 
     private const string StoreSample = """
-        [StoreAttributeBlex(Name = "counter", Persist = true)]
+        [BlexStoreAttribute(Name = "counter", Persist = true)]
         public partial class CounterStore
         {
-            [StateAttributeBlex] private int _count;
-            [StateAttributeBlex] private int _step = 1;
+            [BlexStateAttribute] private int _count;
+            [BlexStateAttribute] private int _step = 1;
 
-            [ComputedAttributeBlex] private int  ComputeDoubleCount() => Count * 2;
-            [ComputedAttributeBlex] private bool ComputeIsEven()      => Count % 2 == 0;
+            [BlexComputedAttribute] private int  ComputeDoubleCount() => Count * 2;
+            [BlexComputedAttribute] private bool ComputeIsEven()      => Count % 2 == 0;
 
-            [ActionAttributeBlex] private void OnIncrement()       => Count += Step;
-            [ActionAttributeBlex] private void OnDecrement()       => Count -= Step;
-            [ActionAttributeBlex] private void OnSetStep(int step) => Step = step;
+            [BlexActionAttribute] private void OnIncrement()       => Count += Step;
+            [BlexActionAttribute] private void OnDecrement()       => Count -= Step;
+            [BlexActionAttribute] private void OnSetStep(int step) => Step = step;
         }
         """;
 
     private const string CounterUsage = """
-        @inherits ComponentBaseBlex
+        @inherits BlexComponentBase
         @inject CounterStore Counter
 
         <p>Count: @Counter.Count (double: @Counter.DoubleCount)</p>

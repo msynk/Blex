@@ -8,28 +8,28 @@ public sealed record CartLine(string Sku, string Name, decimal UnitPrice, int Qu
 }
 
 /// <summary>
-/// Shows how <c>[ComputedAttributeBlex]</c> memoization behaves. Every compute method bumps a public
+/// Shows how <c>[BlexComputedAttribute]</c> memoization behaves. Every compute method bumps a public
 /// evaluation counter, so the docs page can prove that reading a computed property ten times
 /// only evaluates it once -- and that a state change is what invalidates it.
 /// </summary>
-[StoreAttributeBlex(Name = "cart")]
+[BlexStoreAttribute(Name = "cart")]
 public partial class CartStore
 {
-    [StateAttributeBlex] private IReadOnlyList<CartLine> _lines =
+    [BlexStateAttribute] private IReadOnlyList<CartLine> _lines =
     [
         new("REF-001", "Blex T-shirt", 24.00m, 1),
         new("REF-002", "Sticker pack", 6.50m, 2),
     ];
 
-    [StateAttributeBlex] private decimal _discountRate;
+    [BlexStateAttribute] private decimal _discountRate;
 
-    /// <summary>How many times each compute method has actually run (not a <c>[StateAttributeBlex]</c> field).</summary>
+    /// <summary>How many times each compute method has actually run (not a <c>[BlexStateAttribute]</c> field).</summary>
     public int SubtotalEvaluations { get; private set; }
 
     /// <summary>Evaluation counter for <see cref="Total"/>.</summary>
     public int TotalEvaluations { get; private set; }
 
-    [ComputedAttributeBlex]
+    [BlexComputedAttribute]
     private decimal ComputeSubtotal()
     {
         SubtotalEvaluations++;
@@ -37,20 +37,20 @@ public partial class CartStore
     }
 
     /// <summary>Computed values may build on other computed values.</summary>
-    [ComputedAttributeBlex]
+    [BlexComputedAttribute]
     private decimal ComputeTotal()
     {
         TotalEvaluations++;
         return Math.Round(Subtotal * (1 - DiscountRate), 2);
     }
 
-    [ComputedAttributeBlex] private int ComputeItemCount() => Lines.Sum(l => l.Quantity);
+    [BlexComputedAttribute] private int ComputeItemCount() => Lines.Sum(l => l.Quantity);
 
-    [ActionAttributeBlex]
+    [BlexActionAttribute]
     private void OnSetQuantity(string sku, int quantity)
         => Lines = [.. Lines.Select(l => l.Sku == sku ? l with { Quantity = Math.Max(0, quantity) } : l)];
 
-    [ActionAttributeBlex] private void OnSetDiscount(decimal rate) => DiscountRate = Math.Clamp(rate, 0m, 0.9m);
+    [BlexActionAttribute] private void OnSetDiscount(decimal rate) => DiscountRate = Math.Clamp(rate, 0m, 0.9m);
 
     /// <summary>Resets the evaluation counters so a demo can be replayed from a clean slate.</summary>
     public void ResetEvaluationCounters()

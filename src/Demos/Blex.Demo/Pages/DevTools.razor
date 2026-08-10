@@ -1,8 +1,8 @@
 @page "/devtools"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject CounterStore Counter
 @inject SettingsStore Settings
-@inject ManagerBlex Manager
+@inject BlexManager Manager
 
 <DocPage Href="devtools" Title="DevTools & time travel"
          Lead="Every action streams into the Redux DevTools extension with its payload and the resulting state tree - and the slider rewinds your app.">
@@ -10,7 +10,7 @@
     <h2>Getting connected</h2>
     <ol>
         <li>Install the <a href="https://github.com/reduxjs/redux-devtools" target="_blank" rel="noopener">Redux DevTools</a> browser extension.</li>
-        <li>Run the app with <code>&lt;ProviderBlex&gt;</code> in place and <code>EnableDevTools</code> left at its default.</li>
+        <li>Run the app with <code>&lt;BlexProvider&gt;</code> in place and <code>EnableDevTools</code> left at its default.</li>
         <li>Open the browser devtools and switch to the <strong>Redux</strong> tab. The instance is named after <code>options.DevToolsName</code>.</li>
         <li>Interact with the app. Every action arrives with its argument payload and the state that followed it.</li>
         <li>Drag the slider, or use the jump buttons, to rewind the application live.</li>
@@ -62,7 +62,7 @@
     <CodeBlock Code="@Wire" Language="json" Title="What the extension receives" />
     <p>
         The state tree is keyed by store name - <code>counter</code>, <code>settings</code> and so on
-        - which is exactly what <code>ManagerBlex.CaptureGlobalState()</code> produces.
+        - which is exactly what <code>BlexManager.CaptureGlobalState()</code> produces.
     </p>
 
     <h2>Messages Blex handles</h2>
@@ -148,8 +148,8 @@
 
     <h2>Under the hood</h2>
     <p>
-        The core package has no JS dependency - it only knows the <code>IDevToolsBlex</code>
-        interface. <code>Blex.Blazor</code> supplies <code>ReduxDevToolsConnectorBlex</code>, which
+        The core package has no JS dependency - it only knows the <code>IBlexDevTools</code>
+        interface. <code>Blex.Blazor</code> supplies <code>BlexReduxDevToolsConnector</code>, which
         loads a small ES module and talks to
         <code>window.__REDUX_DEVTOOLS_EXTENSION__</code>.
     </p>
@@ -165,7 +165,7 @@
 
     <h2>Connecting a different sink</h2>
     <p>
-        <code>IDevToolsBlex</code> is public, so the manager can feed anything - a server-side
+        <code>IBlexDevTools</code> is public, so the manager can feed anything - a server-side
         session recorder, a test double, a custom monitor.
     </p>
     <CodeBlock Code="@CustomSink" />
@@ -241,13 +241,13 @@
         """;
 
     private const string Disable = """
-        <ProviderBlex EnableDevTools="@Env.IsDevelopment()">
+        <BlexProvider EnableDevTools="@Env.IsDevelopment()">
             <Router ... />
-        </ProviderBlex>
+        </BlexProvider>
         """;
 
     private const string Interface = """
-        public interface IDevToolsBlex
+        public interface IBlexDevTools
         {
             void Init(JsonObject globalState);
             void Send(string actionName, JsonObject globalState);
@@ -257,7 +257,7 @@
         """;
 
     private const string CustomSink = """
-        public sealed class RecordingDevTools : IDevToolsBlex
+        public sealed class RecordingDevTools : IBlexDevTools
         {
             public List<(string Action, JsonObject State)> Frames { get; } = [];
 

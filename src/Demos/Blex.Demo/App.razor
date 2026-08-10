@@ -1,8 +1,8 @@
 @*
-    The whole app lives inside <ProviderBlex>: it registers every store with the manager,
+    The whole app lives inside <BlexProvider>: it registers every store with the manager,
     restores persisted state, starts undo/redo recording and connects the Redux DevTools bridge.
 *@
-<ProviderBlex>
+<BlexProvider>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
             <RouteView RouteData="@routeData" DefaultLayout="@typeof(DocsLayout)" />
@@ -17,4 +17,4 @@
             </LayoutView>
         </NotFound>
     </Router>
-</ProviderBlex>
+</BlexProvider>

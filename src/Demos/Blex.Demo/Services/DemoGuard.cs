@@ -54,18 +54,18 @@ public sealed class DemoGuard
 
 /// <summary>
 /// Veto middleware. <see cref="BeforeAction"/> runs ahead of the mutation and calling
-/// <see cref="PreActionContextBlex.Cancel"/> stops the action entirely -- nothing mutates,
+/// <see cref="BlexPreActionContext.Cancel"/> stops the action entirely -- nothing mutates,
 /// nothing is recorded, no notification fires.
 /// </summary>
-public sealed class GuardMiddleware(DemoGuard guard) : IMiddlewareBlex
+public sealed class GuardMiddleware(DemoGuard guard) : IBlexMiddleware
 {
     /// <inheritdoc />
-    public void OnAction(ActionContextBlex context)
+    public void OnAction(BlexActionContext context)
     {
     }
 
     /// <inheritdoc />
-    public void BeforeAction(PreActionContextBlex context)
+    public void BeforeAction(BlexPreActionContext context)
     {
         if (!guard.IsReadOnly || guard.AlwaysAllow.Contains(context.QualifiedName))
             return;

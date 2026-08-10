@@ -7,7 +7,7 @@ namespace Blex.Tests;
 
 public class ActionArgsTests
 {
-    private sealed class PayloadCapturingDevTools : IDevToolsBlex
+    private sealed class PayloadCapturingDevTools : IBlexDevTools
     {
         public List<(string Action, JsonObject? Payload)> Sent { get; } = [];
         public void Init(JsonObject globalState) { }
@@ -18,7 +18,7 @@ public class ActionArgsTests
     [Fact]
     public void ActionArgs_AreVisibleToSubscribers()
     {
-        using var harness = TestHarnessBlex.For<CounterStore>();
+        using var harness = BlexTestHarness.For<CounterStore>();
         harness.Store.Add(5);
 
         var recorded = harness.Log.Last!;
@@ -30,7 +30,7 @@ public class ActionArgsTests
     [Fact]
     public void ParameterlessAction_HasEmptyArgs()
     {
-        using var harness = TestHarnessBlex.For<CounterStore>();
+        using var harness = BlexTestHarness.For<CounterStore>();
         harness.Store.Increment();
 
         Assert.Empty(harness.Log.Last!.Args);
@@ -39,7 +39,7 @@ public class ActionArgsTests
     [Fact]
     public void StandaloneSet_CarriesAssignedValueAsArg()
     {
-        using var harness = TestHarnessBlex.For<CounterStore>();
+        using var harness = BlexTestHarness.For<CounterStore>();
         harness.Store.Count = 3;
 
         var recorded = harness.Log.Last!;
@@ -53,7 +53,7 @@ public class ActionArgsTests
     public void ActionArgs_AreVisibleToPreActionFilters()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx =>
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx =>
         {
             // Veto negative amounts based on the payload.
             foreach (var arg in ctx.Args)
@@ -77,7 +77,7 @@ public class ActionArgsTests
     public void DevTools_ReceivesActionPayload()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         var devTools = new PayloadCapturingDevTools();
         manager.ConnectDevTools(devTools);
@@ -93,11 +93,11 @@ public class ActionArgsTests
     [Fact]
     public void DevTools_PayloadIsRedacted_ByKeyRedaction()
     {
-        var options = new OptionsBlex();
+        var options = new BlexOptions();
         options.RedactDevToolsKeys("name");
 
         var store = new ProfileStore();
-        var manager = new ManagerBlex { DevToolsStateSanitizer = options.DevToolsStateSanitizer };
+        var manager = new BlexManager { DevToolsStateSanitizer = options.DevToolsStateSanitizer };
         manager.Register(store);
         var devTools = new PayloadCapturingDevTools();
         manager.ConnectDevTools(devTools);
@@ -112,7 +112,7 @@ public class ActionArgsTests
     public void LegacyDevToolsSink_StillReceivesActions_ViaDefaultInterfaceMethod()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         var devTools = new LegacySink();
         manager.ConnectDevTools(devTools);
@@ -122,7 +122,7 @@ public class ActionArgsTests
         Assert.Equal(["counter/Add"], devTools.Actions);
     }
 
-    private sealed class LegacySink : IDevToolsBlex
+    private sealed class LegacySink : IBlexDevTools
     {
         public List<string> Actions { get; } = [];
         public void Init(JsonObject globalState) { }

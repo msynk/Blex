@@ -30,7 +30,7 @@
     <p>
         <code>AddBlex</code> registers the manager and the middleware pipeline;
         <code>AddBlexStore&lt;T&gt;</code> registers each store as a scoped service exposed both as
-        its concrete type and as <code>IStoreBlex</code>. A store is attached to the manager on first
+        its concrete type and as <code>IBlexStore</code>. A store is attached to the manager on first
         resolution, so its actions are observed even in hosts without a provider component - console
         apps, workers and tests included.
     </p>
@@ -41,15 +41,15 @@
 
     <h2>Add the provider</h2>
     <p>
-        <code>&lt;ProviderBlex&gt;</code> goes once, near the root of the app, wrapping the router.
-        On initialization it registers every <code>IStoreBlex</code> with the manager, restores
+        <code>&lt;BlexProvider&gt;</code> goes once, near the root of the app, wrapping the router.
+        On initialization it registers every <code>IBlexStore</code> with the manager, restores
         prerendered and persisted state, and starts undo/redo recording; on first render it connects
         the Redux DevTools bridge.
     </p>
 
     <CodeBlock Code="@AppSample" Language="razor" FileName="App.razor" />
 
-    <ApiTable Title="&lt;ProviderBlex&gt; parameters" Rows="@ProviderRows" MemberHeader="Parameter" />
+    <ApiTable Title="&lt;BlexProvider&gt; parameters" Rows="@ProviderRows" MemberHeader="Parameter" />
 
     <Callout Kind="Callout.CalloutKind.Warning" Title="Turn DevTools off in production">
         <p style="margin-bottom:0">
@@ -64,7 +64,7 @@
     <p>
         The core package has no JS or Blazor dependency. In a console app, worker or test, resolve
         the stores from DI (which registers them with the manager) and drive them directly. For
-        persistence, implement <code>IStorageBlex</code> over a file or database and call
+        persistence, implement <code>IBlexStorage</code> over a file or database and call
         <code>AddBlexPersistence()</code>.
     </p>
 
@@ -82,12 +82,12 @@
 @code {
     private static readonly IReadOnlyList<ApiTable.Row> RegistrationRows =
     [
-        new("AddBlex(Action&lt;OptionsBlex&gt;?)", "Registers <code>ManagerBlex</code> (scoped) and the middleware pipeline. The options object configures the DevTools name, sanitizers, middleware and the error sink."),
-        new("AddBlexStore&lt;TStore&gt;()", "Registers a store as scoped, resolvable both as <code>TStore</code> and as <code>IStoreBlex</code>. Constructor dependencies are injected, so a store can take an <code>HttpClient</code> like any other service."),
-        new("AddBlexPersistence(Action&lt;PersistenceOptionsBlex&gt;?)", "Enables durable persistence for stores marked <code>Persist = true</code>. Requires an <code>IStorageBlex</code> registration."),
-        new("AddBlexLocalStoragePersistence(…)", "Blazor: registers <code>BrowserStorageBlex</code> over <code>window.localStorage</code> and calls <code>AddBlexPersistence</code>."),
+        new("AddBlex(Action&lt;BlexOptions&gt;?)", "Registers <code>BlexManager</code> (scoped) and the middleware pipeline. The options object configures the DevTools name, sanitizers, middleware and the error sink."),
+        new("AddBlexStore&lt;TStore&gt;()", "Registers a store as scoped, resolvable both as <code>TStore</code> and as <code>IBlexStore</code>. Constructor dependencies are injected, so a store can take an <code>HttpClient</code> like any other service."),
+        new("AddBlexPersistence(Action&lt;BlexPersistenceOptions&gt;?)", "Enables durable persistence for stores marked <code>Persist = true</code>. Requires an <code>IBlexStorage</code> registration."),
+        new("AddBlexLocalStoragePersistence(…)", "Blazor: registers <code>BlexBrowserStorage</code> over <code>window.localStorage</code> and calls <code>AddBlexPersistence</code>."),
         new("AddBlexSessionStoragePersistence(…)", "Blazor: the same, over <code>window.sessionStorage</code> - cleared when the tab closes."),
-        new("AddBlexHistory(int maxEntries = 100)", "Registers <code>HistoryBlex</code> for in-app undo/redo. <code>&lt;ProviderBlex&gt;</code> starts recording once rehydration completes."),
+        new("AddBlexHistory(int maxEntries = 100)", "Registers <code>BlexHistory</code> for in-app undo/redo. <code>&lt;BlexProvider&gt;</code> starts recording once rehydration completes."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> ProviderRows =
@@ -136,7 +136,7 @@
         """;
 
     private const string AppSample = """
-        <ProviderBlex EnableDevTools="@builder.HostEnvironment.IsDevelopment()">
+        <BlexProvider EnableDevTools="@builder.HostEnvironment.IsDevelopment()">
             <Router AppAssembly="@typeof(App).Assembly">
                 <Found Context="routeData">
                     <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
@@ -145,7 +145,7 @@
                     <p>Not found.</p>
                 </NotFound>
             </Router>
-        </ProviderBlex>
+        </BlexProvider>
         """;
 
     private const string HeadlessSample = """
@@ -157,7 +157,7 @@
 
         // Resolving the store registers it with the manager.
         var store = provider.GetRequiredService<CounterStore>();
-        var manager = provider.GetRequiredService<ManagerBlex>();
+        var manager = provider.GetRequiredService<BlexManager>();
 
         store.Increment();
         Console.WriteLine(manager.CaptureGlobalState().ToJsonString());

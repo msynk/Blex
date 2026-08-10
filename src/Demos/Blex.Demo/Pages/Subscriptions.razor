@@ -1,13 +1,13 @@
 @page "/subscriptions"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject CounterStore Counter
 
 <DocPage Href="subscriptions" Title="Components & selectors"
          Lead="Re-render on the state you actually use - from a whole store down to a single projected value.">
 
-    <h2>ComponentBaseBlex</h2>
+    <h2>BlexComponentBase</h2>
     <p>
-        Inherit from <code>ComponentBaseBlex</code> and call <code>Subscribe(...)</code> in
+        Inherit from <code>BlexComponentBase</code> and call <code>Subscribe(...)</code> in
         <code>OnInitialized</code>. The component re-renders whenever a subscribed store changes and
         detaches every handler on dispose - there is no <code>StateHasChanged</code> to call and
         nothing to clean up.
@@ -18,7 +18,7 @@
     <p>You can subscribe to several stores at once; the call is idempotent per store.</p>
     <CodeBlock Code="@Multi" />
 
-    <ApiTable Title="ComponentBaseBlex" Rows="@BaseRows" />
+    <ApiTable Title="BlexComponentBase" Rows="@BaseRows" />
 
     <h2>Selector subscriptions</h2>
     <p>
@@ -58,13 +58,13 @@
 
     <h2>Outside components</h2>
     <p>
-        The same primitive is a plain extension method on <code>IStoreBlex</code>, usable anywhere. It
+        The same primitive is a plain extension method on <code>IBlexStore</code>, usable anywhere. It
         returns a token - dispose it to stop observing.
     </p>
 
     <CodeBlock Code="@Standalone" />
 
-    <ApiTable Title="StoreSubscriptionExtensionsBlex" Rows="@ExtensionRows" />
+    <ApiTable Title="BlexStoreSubscriptionExtensions" Rows="@ExtensionRows" />
 
     <h3>Previous and current</h3>
     <p>
@@ -93,7 +93,7 @@
 
     <h3>Across stores</h3>
     <p>
-        <code>ManagerBlex</code> carries the same pair of overloads for a projection that spans
+        <code>BlexManager</code> carries the same pair of overloads for a projection that spans
         stores. Without it, a value derived from two stores has to be recomputed on every action of
         every store - the cross-store equivalent of re-rendering the whole app on any change.
     </p>
@@ -103,7 +103,7 @@
         <p style="margin-bottom:0">
             The store-level overload only runs when <em>that</em> store changes; the manager-level one
             runs after every action in the application. Keep the projection cheap - read
-            already-memoized <a href="computed"><code>[ComputedAttributeBlex]</code></a> properties
+            already-memoized <a href="computed"><code>[BlexComputedAttribute]</code></a> properties
             rather than recomputing over collections inside it.
         </p>
     </Callout>
@@ -117,7 +117,7 @@
 
     <h2>The raw event</h2>
     <p>
-        Under everything is <code>IStoreBlex.StateChanged</code>, a plain <code>Action</code> raised once
+        Under everything is <code>IBlexStore.StateChanged</code>, a plain <code>Action</code> raised once
         per action after the state has settled. Use it directly when you want no machinery at all -
         just remember to unsubscribe.
     </p>
@@ -148,20 +148,20 @@
 
     private static readonly IReadOnlyList<ApiTable.Row> BaseRows =
     [
-        new("void Subscribe(params ReadOnlySpan&lt;IStoreBlex&gt;)", "Re-render on any change to the given stores. Duplicate subscriptions are ignored."),
-        new("void Subscribe&lt;T&gt;(IStoreBlex, Func&lt;T&gt;, IEqualityComparer&lt;T&gt;?)", "Re-render only when the projected value changes."),
+        new("void Subscribe(params ReadOnlySpan&lt;IBlexStore&gt;)", "Re-render on any change to the given stores. Duplicate subscriptions are ignored."),
+        new("void Subscribe&lt;T&gt;(IBlexStore, Func&lt;T&gt;, IEqualityComparer&lt;T&gt;?)", "Re-render only when the projected value changes."),
         new("void OwnsSubscription(IDisposable)", "Dispose the given token when the component is disposed."),
         new("void Dispose(bool disposing)", "<code>protected virtual</code> hook for your own cleanup. Store subscriptions are already detached when it runs - override this instead of implementing <code>IDisposable</code> yourself."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> ExtensionRows =
     [
-        new("IDisposable Subscribe&lt;T&gt;(this IStoreBlex, Func&lt;T&gt; selector, Action&lt;T&gt; onChanged, IEqualityComparer&lt;T&gt;? comparer = null, bool fireImmediately = false)", "Invoke <code>onChanged</code> with the new value whenever the projection changes."),
-        new("IDisposable Subscribe&lt;T&gt;(this IStoreBlex, Func&lt;T&gt; selector, Action&lt;T, T&gt; onChanged, IEqualityComparer&lt;T&gt;? comparer = null, bool fireImmediately = false)", "The same, but the callback receives <code>(previous, current)</code>."),
+        new("IDisposable Subscribe&lt;T&gt;(this IBlexStore, Func&lt;T&gt; selector, Action&lt;T&gt; onChanged, IEqualityComparer&lt;T&gt;? comparer = null, bool fireImmediately = false)", "Invoke <code>onChanged</code> with the new value whenever the projection changes."),
+        new("IDisposable Subscribe&lt;T&gt;(this IBlexStore, Func&lt;T&gt; selector, Action&lt;T, T&gt; onChanged, IEqualityComparer&lt;T&gt;? comparer = null, bool fireImmediately = false)", "The same, but the callback receives <code>(previous, current)</code>."),
     ];
 
     private const string Basic = """
-        @inherits ComponentBaseBlex
+        @inherits BlexComponentBase
         @inject CounterStore Counter
 
         <p>Count: @Counter.Count</p>
@@ -218,7 +218,7 @@
         """;
 
     private const string ManagerSelector = """
-        @inject ManagerBlex Manager
+        @inject BlexManager Manager
         @inject CartStore Cart
         @inject ProfileStore Profile
 
@@ -235,7 +235,7 @@
 
     private const string Owns = """
         @code {
-            [Inject] private ManagerBlex Manager { get; set; } = default!;
+            [Inject] private BlexManager Manager { get; set; } = default!;
 
             protected override void OnInitialized()
             {

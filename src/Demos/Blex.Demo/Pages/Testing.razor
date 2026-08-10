@@ -17,20 +17,20 @@
 
     <h2>The harness</h2>
     <p>
-        <code>TestHarnessBlex&lt;TStore&gt;</code> creates a fresh <code>ManagerBlex</code>,
+        <code>BlexTestHarness&lt;TStore&gt;</code> creates a fresh <code>BlexManager</code>,
         registers your store with it, and starts recording every action.
     </p>
     <CodeBlock Code="@Harness" />
-    <ApiTable Title="TestHarnessBlex&lt;TStore&gt;" Rows="@HarnessRows" />
+    <ApiTable Title="BlexTestHarness&lt;TStore&gt;" Rows="@HarnessRows" />
 
     <h2>The action log</h2>
     <p>
-        <code>ActionLogBlex</code> records each dispatch with its name, sequence, arguments and the global
+        <code>BlexActionLog</code> records each dispatch with its name, sequence, arguments and the global
         state immediately afterwards.
     </p>
     <CodeBlock Code="@Log" />
-    <ApiTable Title="ActionLogBlex" Rows="@LogRows" />
-    <ApiTable Title="RecordedActionBlex" Rows="@RecordedRows" />
+    <ApiTable Title="BlexActionLog" Rows="@LogRows" />
+    <ApiTable Title="BlexRecordedAction" Rows="@RecordedRows" />
 
     <h2>Asserting on payloads</h2>
     <p>Action arguments are captured automatically, so you can assert on exactly what was dispatched.</p>
@@ -60,19 +60,19 @@
     <p>
         A store is rarely alone in production - a veto filter, an audit logger or a metrics recorder
         usually wraps it, and those guard rails deserve tests too.
-        <code>TestHarnessBlex.WithFilter</code> and <code>WithMiddleware</code> give you the same
+        <code>BlexTestHarness.WithFilter</code> and <code>WithMiddleware</code> give you the same
         zero-setup harness with the pipeline attached.
     </p>
     <CodeBlock Code="@MiddlewareTest" />
 
     <p>
-        Reach for a hand-built <code>ManagerBlex</code> only when the test genuinely needs more than
+        Reach for a hand-built <code>BlexManager</code> only when the test genuinely needs more than
         one store, or a manager configured before any store is registered.
     </p>
 
     <h2>Testing persistence</h2>
     <p>
-        <code>IStorageBlex</code> is a three-method interface, so an in-memory fake is trivial.
+        <code>IBlexStorage</code> is a three-method interface, so an in-memory fake is trivial.
         Remember to <code>FlushAsync</code> when the persistor is debounced.
     </p>
     <CodeBlock Code="@PersistenceTest" />
@@ -81,7 +81,7 @@
     <CodeBlock Code="@HistoryTest" />
 
     <h2>Extension methods</h2>
-    <ApiTable Title="TestExtensionsBlex" Rows="@ExtensionRows" />
+    <ApiTable Title="BlexTestExtensions" Rows="@ExtensionRows" />
 
     <Callout Kind="Callout.CalloutKind.Tip" Title="Snapshots make good assertions">
         <p style="margin-bottom:0">
@@ -111,13 +111,13 @@
 @code {
     private static readonly IReadOnlyList<ApiTable.Row> HarnessRows =
     [
-        new("TestHarnessBlex.For&lt;TStore&gt;()", "Creates a harness for a store with a parameterless constructor."),
-        new("TestHarnessBlex.For(store)", "Creates a harness around an already-constructed store - use this when the store has dependencies."),
-        new("TestHarnessBlex.WithFilter&lt;TStore&gt;(predicate)", "A harness whose manager vetoes any action the predicate rejects. The shorthand for testing a store together with its guard rails."),
-        new("TestHarnessBlex.WithMiddleware&lt;TStore&gt;(…)", "A harness whose manager runs the given middleware. Also accepts an already-constructed store."),
+        new("BlexTestHarness.For&lt;TStore&gt;()", "Creates a harness for a store with a parameterless constructor."),
+        new("BlexTestHarness.For(store)", "Creates a harness around an already-constructed store - use this when the store has dependencies."),
+        new("BlexTestHarness.WithFilter&lt;TStore&gt;(predicate)", "A harness whose manager vetoes any action the predicate rejects. The shorthand for testing a store together with its guard rails."),
+        new("BlexTestHarness.WithMiddleware&lt;TStore&gt;(…)", "A harness whose manager runs the given middleware. Also accepts an already-constructed store."),
         new("TStore Store", "The store under test."),
-        new("ManagerBlex Manager", "The manager backing the harness. Use it to add middleware assertions or extra subscriptions."),
-        new("ActionLogBlex Log", "Records every dispatch."),
+        new("BlexManager Manager", "The manager backing the harness. Use it to add middleware assertions or extra subscriptions."),
+        new("BlexActionLog Log", "Records every dispatch."),
         new("JsonObject State", "The current global state tree."),
         new("JsonObject Snapshot()", "The current snapshot of the store under test."),
         new("void Dispose()", "Detaches the log."),
@@ -125,8 +125,8 @@
 
     private static readonly IReadOnlyList<ApiTable.Row> LogRows =
     [
-        new("IReadOnlyList&lt;RecordedActionBlex&gt; Actions", "Everything recorded, in dispatch order."),
-        new("RecordedActionBlex? Last", "The most recent action, or <code>null</code>."),
+        new("IReadOnlyList&lt;BlexRecordedAction&gt; Actions", "Everything recorded, in dispatch order."),
+        new("BlexRecordedAction? Last", "The most recent action, or <code>null</code>."),
         new("int Count", "Number of recorded actions."),
         new("IReadOnlyList&lt;string&gt; Names", "The bare action names in order."),
         new("IReadOnlyList&lt;string&gt; QualifiedNames", "The qualified names in order."),
@@ -137,16 +137,16 @@
 
     private static readonly IReadOnlyList<ApiTable.Row> RecordedRows =
     [
-        new("IStoreBlex Store", "The originating store."),
+        new("IBlexStore Store", "The originating store."),
         new("string ActionName / QualifiedName", "<code>\"Increment\"</code> and <code>\"counter/Increment\"</code>."),
         new("int Sequence", "The monotonic dispatch number."),
         new("JsonObject State", "The global state tree right after this action."),
-        new("IReadOnlyList&lt;ActionArgBlex&gt; Args", "The captured arguments."),
+        new("IReadOnlyList&lt;BlexActionArg&gt; Args", "The captured arguments."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> ExtensionRows =
     [
-        new("manager.RecordActions()", "Starts recording on any manager and returns the <code>ActionLogBlex</code>. Dispose to stop."),
+        new("manager.RecordActions()", "Starts recording on any manager and returns the <code>BlexActionLog</code>. Dispose to stop."),
         new("store.Snapshot()", "Alias for <code>SerializeState()</code>."),
         new("store.WaitForAsync(Func&lt;bool&gt;, TimeSpan?)", "Waits until the condition holds, re-checking on every store change. Throws <code>TimeoutException</code> after the timeout (default 5 s)."),
         new("store.CountNotifications(Action)", "Counts <code>StateChanged</code> notifications raised while the delegate runs."),
@@ -172,7 +172,7 @@
         [Fact]
         public void Increment_dispatches_one_action()
         {
-            using var harness = TestHarnessBlex.For<CounterStore>();
+            using var harness = BlexTestHarness.For<CounterStore>();
 
             harness.Store.Increment();
 
@@ -181,11 +181,11 @@
         }
 
         // For a store with dependencies, construct it yourself:
-        using var harness = TestHarnessBlex.For(new WeatherStore(httpClient));
+        using var harness = BlexTestHarness.For(new WeatherStore(httpClient));
         """;
 
     private const string Log = """
-        using var harness = TestHarnessBlex.For<CounterStore>();
+        using var harness = BlexTestHarness.For<CounterStore>();
 
         harness.Store.Increment();
         harness.Store.Increment();
@@ -220,7 +220,7 @@
         [Fact]
         public async Task LoadUser_populates_the_user()
         {
-            using var harness = TestHarnessBlex.For(new UserStore(new FakeApi()));
+            using var harness = BlexTestHarness.For(new UserStore(new FakeApi()));
 
             await harness.Store.LoadUser(42);
 
@@ -232,7 +232,7 @@
         [Fact]
         public async Task LoadUser_reports_loading_while_in_flight()
         {
-            using var harness = TestHarnessBlex.For(new UserStore(new SlowApi()));
+            using var harness = BlexTestHarness.For(new UserStore(new SlowApi()));
 
             var pending = harness.Store.LoadUser(42);          // do not await yet
             Assert.True(harness.Store.LoadUserIsLoading);
@@ -246,7 +246,7 @@
         [Fact]
         public async Task A_failing_effect_captures_the_exception()
         {
-            using var harness = TestHarnessBlex.For(new UserStore(new ThrowingApi()));
+            using var harness = BlexTestHarness.For(new UserStore(new ThrowingApi()));
 
             await harness.Store.LoadUser(42);   // never throws
 
@@ -256,7 +256,7 @@
         [Fact]
         public async Task Cancelling_is_not_an_error()
         {
-            using var harness = TestHarnessBlex.For(new UserStore(new SlowApi()));
+            using var harness = BlexTestHarness.For(new UserStore(new SlowApi()));
 
             var pending = harness.Store.LoadUser(42);
             harness.Store.CancelLoadUser();
@@ -283,7 +283,7 @@
         [Fact]
         public void A_filter_vetoes_the_action()
         {
-            using var harness = TestHarnessBlex.WithFilter<CounterStore>(_ => false);
+            using var harness = BlexTestHarness.WithFilter<CounterStore>(_ => false);
 
             harness.Store.Increment();
 
@@ -295,7 +295,7 @@
         public void The_audit_middleware_sees_every_action()
         {
             var audit = new AuditMiddleware();
-            using var harness = TestHarnessBlex.WithMiddleware<CounterStore>(audit);
+            using var harness = BlexTestHarness.WithMiddleware<CounterStore>(audit);
 
             harness.Store.Increment();
 
@@ -306,7 +306,7 @@
         [Fact]
         public void Two_stores_share_one_filter()
         {
-            var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx => ctx.Store.Name != "cart")]);
+            var manager = new BlexManager([new BlexFilterMiddleware(ctx => ctx.Store.Name != "cart")]);
             manager.Register(new CartStore());
             manager.Register(new ProfileStore());
             using var log = manager.RecordActions();
@@ -315,7 +315,7 @@
         """;
 
     private const string PersistenceTest = """
-        private sealed class MemoryStorage : IStorageBlex
+        private sealed class MemoryStorage : IBlexStorage
         {
             public Dictionary<string, string> Values { get; } = [];
 
@@ -339,11 +339,11 @@
         public async Task State_round_trips_through_storage()
         {
             var storage = new MemoryStorage();
-            var manager = new ManagerBlex();
+            var manager = new BlexManager();
             var store = new SettingsStore();
             manager.Register(store);
 
-            await using var persistor = new StatePersistorBlex(manager, storage);
+            await using var persistor = new BlexStatePersistor(manager, storage);
             await persistor.StartAsync();
 
             store.SetAccent("teal");
@@ -352,10 +352,10 @@
             Assert.Contains("teal", storage.Values["blex:settings"]);
 
             // A fresh store rehydrates from the same storage.
-            var manager2 = new ManagerBlex();
+            var manager2 = new BlexManager();
             var store2 = new SettingsStore();
             manager2.Register(store2);
-            await using var persistor2 = new StatePersistorBlex(manager2, storage);
+            await using var persistor2 = new BlexStatePersistor(manager2, storage);
             await persistor2.StartAsync();
 
             Assert.Equal("teal", store2.Accent);
@@ -366,11 +366,11 @@
         [Fact]
         public void Undo_restores_the_previous_state()
         {
-            var manager = new ManagerBlex();
+            var manager = new BlexManager();
             var store = new CounterStore();
             manager.Register(store);
 
-            using var history = new HistoryBlex(manager);
+            using var history = new BlexHistory(manager);
             history.Start();
 
             store.Increment();

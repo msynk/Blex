@@ -1,5 +1,5 @@
 @page "/entities"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject ContactsStore Contacts
 
 <DocPage Href="entities" Title="Entity adapter"
@@ -10,7 +10,7 @@
         Keeping a collection as a flat <code>List&lt;T&gt;</code> means every update is a scan, every
         lookup by id is a scan, and every mutation risks being done in place - which
         <a href="stores#change-detection">silently defeats change detection</a>.
-        <code>EntityStateBlex&lt;TEntity, TKey&gt;</code> stores an ordered id list plus an id-keyed map,
+        <code>BlexEntityState&lt;TEntity, TKey&gt;</code> stores an ordered id list plus an id-keyed map,
         and every operation returns a <em>new</em> instance, so notifications, time-travel and
         persistence all behave.
     </p>
@@ -20,7 +20,7 @@
     <h2>Declaring one</h2>
     <p>
         The adapter holds the id selector, so it is not serializable - keep it as a
-        <code>static readonly</code> field. The <code>[StateAttributeBlex]</code> field holds the state itself.
+        <code>static readonly</code> field. The <code>[BlexStateAttribute]</code> field holds the state itself.
     </p>
 
     <CodeBlock Code="@Declare" />
@@ -113,13 +113,13 @@
         <p class="small muted" style="margin-top:0.4rem">@_setNote</p>
     </DemoCard>
 
-    <h2>EntityStateBlex members</h2>
+    <h2>BlexEntityState members</h2>
     <ApiTable Rows="@StateRows" />
 
-    <h2>EntityAdapterBlex operations</h2>
+    <h2>BlexEntityAdapter operations</h2>
     <p>
         Every operation takes the current state and returns the next one. Assign the result back to
-        the <code>[StateAttributeBlex]</code> property - that assignment is what makes the change visible.
+        the <code>[BlexStateAttribute]</code> property - that assignment is what makes the change visible.
     </p>
     <ApiTable Rows="@AdapterRows" />
 
@@ -165,7 +165,7 @@
 
     <h2>Serialization</h2>
     <p>
-        <code>EntityStateBlex</code> round-trips through JSON as <code>{ "ids": [...], "entities":
+        <code>BlexEntityState</code> round-trips through JSON as <code>{ "ids": [...], "entities":
         { ... } }</code>, so a normalized collection persists and time-travels like any other state.
         <code>Count</code> and <code>All</code> are marked <code>[JsonIgnore]</code> - they are
         derived from <code>Ids</code>.
@@ -181,7 +181,7 @@
 
     <h2>Deriving views</h2>
     <p>
-        Pair the adapter with <a href="computed"><code>[ComputedAttributeBlex]</code></a> to project filtered or
+        Pair the adapter with <a href="computed"><code>[BlexComputedAttribute]</code></a> to project filtered or
         aggregated views. They are memoized, so a filtered list is rebuilt once per change rather
         than once per render.
     </p>
@@ -235,7 +235,7 @@
         new("int Count", "Number of stored entities. <code>[JsonIgnore]</code>."),
         new("bool Contains(TKey)", "Whether an entity with that id exists."),
         new("TEntity? Find(TKey)", "The entity for an id, or <code>default</code>."),
-        new("static EntityStateBlex&lt;TEntity, TKey&gt; Empty", "A shared, read-only empty state."),
+        new("static BlexEntityState&lt;TEntity, TKey&gt; Empty", "A shared, read-only empty state."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> AdapterRows =
@@ -258,7 +258,7 @@
     ];
 
     private const string Shape = """
-        public sealed class EntityStateBlex<TEntity, TKey> where TKey : notnull
+        public sealed class BlexEntityState<TEntity, TKey> where TKey : notnull
         {
             public IReadOnlyList<TKey> Ids { get; }                       // order
             public IReadOnlyDictionary<TKey, TEntity> Entities { get; }   // lookup
@@ -266,68 +266,68 @@
         """;
 
     private const string Declare = """
-        [StoreAttributeBlex(Name = "contacts")]
+        [BlexStoreAttribute(Name = "contacts")]
         public partial class ContactsStore
         {
             // Holds the id selector, so it is static and never serialized.
-            private static readonly EntityAdapterBlex<Contact, int> Adapter = new(c => c.Id);
+            private static readonly BlexEntityAdapter<Contact, int> Adapter = new(c => c.Id);
 
-            [StateAttributeBlex] private EntityStateBlex<Contact, int> _contacts = Adapter.GetInitialState();
+            [BlexStateAttribute] private BlexEntityState<Contact, int> _contacts = Adapter.GetInitialState();
 
-            [ActionAttributeBlex] private void OnAdd(Contact c)    => Contacts = Adapter.AddOne(Contacts, c);
-            [ActionAttributeBlex] private void OnRemove(int id)    => Contacts = Adapter.RemoveOne(Contacts, id);
+            [BlexActionAttribute] private void OnAdd(Contact c)    => Contacts = Adapter.AddOne(Contacts, c);
+            [BlexActionAttribute] private void OnRemove(int id)    => Contacts = Adapter.RemoveOne(Contacts, id);
         }
         """;
 
     private const string Sorted = """
-        private static readonly EntityAdapterBlex<Contact, int> Adapter =
+        private static readonly BlexEntityAdapter<Contact, int> Adapter =
             new(c => c.Id, Comparer<Contact>.Create((a, b) => string.CompareOrdinal(a.Name, b.Name)));
         """;
 
     private const string StoreSource = """
-        [StoreAttributeBlex(Name = "contacts")]
+        [BlexStoreAttribute(Name = "contacts")]
         public partial class ContactsStore
         {
-            private static readonly EntityAdapterBlex<Contact, int> Adapter =
+            private static readonly BlexEntityAdapter<Contact, int> Adapter =
                 new(c => c.Id, Comparer<Contact>.Create((a, b) => string.CompareOrdinal(a.Name, b.Name)));
 
-            [StateAttributeBlex] private EntityStateBlex<Contact, int> _contacts = Adapter.GetInitialState([...]);
-            [StateAttributeBlex] private string _teamFilter = "All";
+            [BlexStateAttribute] private BlexEntityState<Contact, int> _contacts = Adapter.GetInitialState([...]);
+            [BlexStateAttribute] private string _teamFilter = "All";
 
-            [ComputedAttributeBlex] private int ComputeTotal()   => Contacts.Count;
-            [ComputedAttributeBlex] private int ComputeStarred() => Contacts.All.Count(c => c.Starred);
+            [BlexComputedAttribute] private int ComputeTotal()   => Contacts.Count;
+            [BlexComputedAttribute] private int ComputeStarred() => Contacts.All.Count(c => c.Starred);
 
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private IReadOnlyList<Contact> ComputeVisible()
                 => TeamFilter == "All"
                     ? [.. Contacts.All]
                     : [.. Contacts.All.Where(c => c.Team == TeamFilter)];
 
-            [ActionAttributeBlex] private void OnAdd(string name, string team)
+            [BlexActionAttribute] private void OnAdd(string name, string team)
                 => Contacts = Adapter.AddOne(Contacts, new Contact(_nextId++, name, team, false));
 
-            [ActionAttributeBlex] private void OnToggleStar(int id)
+            [BlexActionAttribute] private void OnToggleStar(int id)
                 => Contacts = Adapter.UpdateOne(Contacts, id, c => c with { Starred = !c.Starred });
 
-            [ActionAttributeBlex] private void OnStarAll()
+            [BlexActionAttribute] private void OnStarAll()
                 => Contacts = Adapter.Map(Contacts, c => c with { Starred = true });
 
-            [ActionAttributeBlex] private void OnRemoveUnstarred()
+            [BlexActionAttribute] private void OnRemoveUnstarred()
                 => Contacts = Adapter.RemoveMany(Contacts,
                        [.. Contacts.All.Where(c => !c.Starred).Select(c => c.Id)]);
         }
         """;
 
     private const string Usage = """
-        [ActionAttributeBlex] private void OnUpsert(Todo todo) => Todos = Adapter.UpsertOne(Todos, todo);
-        [ActionAttributeBlex] private void OnToggle(int id)    => Todos = Adapter.UpdateOne(Todos, id, t => t with { Done = !t.Done });
-        [ActionAttributeBlex] private void OnRemove(int id)    => Todos = Adapter.RemoveOne(Todos, id);
-        [ActionAttributeBlex] private void OnLoaded(Todo[] t)  => Todos = Adapter.SetAll(Todos, t);
+        [BlexActionAttribute] private void OnUpsert(Todo todo) => Todos = Adapter.UpsertOne(Todos, todo);
+        [BlexActionAttribute] private void OnToggle(int id)    => Todos = Adapter.UpdateOne(Todos, id, t => t with { Done = !t.Done });
+        [BlexActionAttribute] private void OnRemove(int id)    => Todos = Adapter.RemoveOne(Todos, id);
+        [BlexActionAttribute] private void OnLoaded(Todo[] t)  => Todos = Adapter.SetAll(Todos, t);
         """;
 
     private const string SetVsUpsert = """
         // The row may have been deleted while the save was in flight. UpsertOne would put it back.
-        [EffectAttributeBlex]
+        [BlexEffectAttribute]
         private async Task OnSave(Todo todo)
         {
             var saved = await _api.PutAsync(todo);
@@ -335,11 +335,11 @@
         }
 
         // Same rule for a batch: ids the user removed in the meantime are ignored.
-        [ActionAttributeBlex] private void OnPatched(Todo[] changed) => Todos = Adapter.SetMany(Todos, changed);
+        [BlexActionAttribute] private void OnPatched(Todo[] changed) => Todos = Adapter.SetMany(Todos, changed);
         """;
 
     private const string NoOpIdentity = """
-        [EffectAttributeBlex(Mode = EffectModeBlex.Drop)]
+        [BlexEffectAttribute(Mode = BlexEffectConcurrency.Drop)]
         private async Task OnPoll()
         {
             var fresh = await _api.GetTodosAsync();
@@ -350,9 +350,9 @@
         """;
 
     private const string Computed = """
-        [ComputedAttributeBlex] private int ComputeRemaining() => Todos.All.Count(t => !t.Done);
+        [BlexComputedAttribute] private int ComputeRemaining() => Todos.All.Count(t => !t.Done);
 
-        [ComputedAttributeBlex]
+        [BlexComputedAttribute]
         private IReadOnlyList<Todo> ComputeVisible() => Filter switch
         {
             Filter.Active => [.. Todos.All.Where(t => !t.Done)],

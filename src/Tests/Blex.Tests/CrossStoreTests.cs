@@ -10,7 +10,7 @@ public class CrossStoreTests
     [Fact]
     public void GetStore_ReturnsRegisteredStoreByType()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -21,7 +21,7 @@ public class CrossStoreTests
     [Fact]
     public void SubscribeTo_FiresOnlyForMatchingStoreType()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         var todo = new TodoStore();
         manager.Register(counter);
@@ -39,7 +39,7 @@ public class CrossStoreTests
     [Fact]
     public void SubscribeToAction_MatchesBareAndQualifiedNames()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -57,7 +57,7 @@ public class CrossStoreTests
     [Fact]
     public void CrossStore_OneStoreReactsToAnother()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         var todo = new TodoStore();
         manager.Register(counter);
@@ -81,7 +81,7 @@ public class CrossStoreTests
     [Fact]
     public void Subscribe_Dispose_StopsReacting()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -98,7 +98,7 @@ public class CrossStoreTests
     [Fact]
     public async Task SubscribeAsync_RunsAsyncReactor()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         var data = new DataStore();
         manager.Register(counter);
@@ -120,7 +120,7 @@ public class CrossStoreTests
     [Fact]
     public void SubscriberException_DoesNotBreakDispatch()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 

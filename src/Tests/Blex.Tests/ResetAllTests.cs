@@ -4,8 +4,8 @@ using Xunit;
 namespace Blex.Tests;
 
 /// <summary>
-/// <see cref="ManagerBlex.ResetAll"/> is the application-wide counterpart to
-/// <see cref="StoreBaseBlex.ResetState"/>: every store returns to the state it had when it was
+/// <see cref="BlexManager.ResetAll"/> is the application-wide counterpart to
+/// <see cref="BlexStoreBase.ResetState"/>: every store returns to the state it had when it was
 /// registered, each as its own normal action, so middleware, persistence, undo/redo and DevTools
 /// all see it exactly like any other dispatch.
 /// </summary>
@@ -16,7 +16,7 @@ public class ResetAllTests
     {
         var counter = new CounterStore();
         var profile = new ProfileStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         manager.Register(profile);
 
@@ -36,7 +36,7 @@ public class ResetAllTests
     {
         var counter = new CounterStore();
         var profile = new ProfileStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         manager.Register(profile);
         counter.Increment();
@@ -55,7 +55,7 @@ public class ResetAllTests
     {
         var counter = new CounterStore();
         var profile = new ProfileStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         manager.Register(profile);
         counter.Increment(); // only this one drifted
@@ -76,8 +76,8 @@ public class ResetAllTests
         var counter = new CounterStore();
         var profile = new ProfileStore();
         // Veto only the counter's reset, so both stores can still be moved off their defaults.
-        var manager = new ManagerBlex(
-            [new FilterMiddlewareBlex(ctx => !(ctx.Store is CounterStore && ctx.ActionName == "ResetState"))]);
+        var manager = new BlexManager(
+            [new BlexFilterMiddleware(ctx => !(ctx.Store is CounterStore && ctx.ActionName == "ResetState"))]);
         manager.Register(counter);
         manager.Register(profile);
         counter.Add(5);
@@ -94,13 +94,13 @@ public class ResetAllTests
     {
         var throwing = new CounterStore();
         var profile = new ProfileStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(throwing);
         manager.Register(profile);
         throwing.Increment();
         profile.SignIn("ada");
 
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
         throwing.StateChanged += () => throw new System.InvalidOperationException("render boom");
 
@@ -116,7 +116,7 @@ public class ResetAllTests
     [Fact]
     public void ResetAll_OnAnEmptyManager_IsANoOp()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.ResetAll(); // must not throw
     }
 }

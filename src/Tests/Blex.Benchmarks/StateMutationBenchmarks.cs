@@ -5,7 +5,7 @@ namespace Blex.Benchmarks;
 
 /// <summary>
 /// The single hottest path: assigning a reactive state property. Measures the per-assignment cost
-/// of <c>StoreBaseBlex.SetState</c> for a real change, a no-op (equal value, short-circuited) and a
+/// of <c>BlexStoreBase.SetState</c> for a real change, a no-op (equal value, short-circuited) and a
 /// batched multi-field action. Allocations per op are reported by <see cref="MemoryDiagnoserAttribute"/>.
 /// </summary>
 [MemoryDiagnoser]

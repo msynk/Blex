@@ -6,15 +6,15 @@ using Xunit;
 namespace Blex.Tests;
 
 /// <summary>
-/// <see cref="ManagerBlex.HandleDevToolsMessage"/> is reached from a JS interop callback with
+/// <see cref="BlexManager.HandleDevToolsMessage"/> is reached from a JS interop callback with
 /// whatever the browser extension sent, so no message shape may throw back into interop.
 /// </summary>
 public class DevToolsMessageTests
 {
-    private static (CounterStore Store, ManagerBlex Manager, List<ErrorBlex> Errors) Setup()
+    private static (CounterStore Store, BlexManager Manager, List<BlexError> Errors) Setup()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
         var store = new CounterStore();
         manager.Register(store);
         return (store, manager, errors);
@@ -94,7 +94,7 @@ public class DevToolsMessageTests
         Assert.Empty(errors);
     }
 
-    private sealed class RecordingDevTools : IDevToolsBlex
+    private sealed class RecordingDevTools : IBlexDevTools
     {
         public List<JsonObject> Inits { get; } = [];
         public void Init(JsonObject globalState) => Inits.Add(globalState);

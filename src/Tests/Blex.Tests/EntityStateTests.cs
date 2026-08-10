@@ -7,7 +7,7 @@ namespace Blex.Tests;
 
 public class EntityStateTests
 {
-    private static readonly EntityAdapterBlex<Todo, int> Adapter = new(t => t.Id);
+    private static readonly BlexEntityAdapter<Todo, int> Adapter = new(t => t.Id);
 
     [Fact]
     public void AddOne_AppendsEntity()
@@ -79,7 +79,7 @@ public class EntityStateTests
     [Fact]
     public void UpdateMany_UpdatesAllMatchedIds()
     {
-        var adapter = new EntityAdapterBlex<Todo, int>(t => t.Id);
+        var adapter = new BlexEntityAdapter<Todo, int>(t => t.Id);
         var state = adapter.SetAll(adapter.GetInitialState(),
             [new Todo(1, "a", false), new Todo(2, "b", false), new Todo(3, "c", false)]);
 
@@ -94,7 +94,7 @@ public class EntityStateTests
     [Fact]
     public void Map_TransformsEveryEntity()
     {
-        var adapter = new EntityAdapterBlex<Todo, int>(t => t.Id);
+        var adapter = new BlexEntityAdapter<Todo, int>(t => t.Id);
         var state = adapter.SetAll(adapter.GetInitialState(),
             [new Todo(1, "a", false), new Todo(2, "b", true)]);
 
@@ -107,7 +107,7 @@ public class EntityStateTests
     [Fact]
     public void SortComparer_KeepsIdsSorted_AcrossOperations()
     {
-        var adapter = new EntityAdapterBlex<Todo, int>(
+        var adapter = new BlexEntityAdapter<Todo, int>(
             t => t.Id,
             Comparer<Todo>.Create((a, b) => string.CompareOrdinal(a.Text, b.Text)));
 

@@ -10,7 +10,7 @@ public class ManagerTests
     [Fact]
     public void GlobalState_AggregatesAllStores()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         var todo = new TodoStore();
         manager.Register(counter);
@@ -29,7 +29,7 @@ public class ManagerTests
     public void Middleware_ReceivesActions_WithQualifiedName()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex(new[] { new DelegateMiddlewareBlex(ctx => seen.Add(ctx.QualifiedName)) });
+        var manager = new BlexManager(new[] { new BlexDelegateMiddleware(ctx => seen.Add(ctx.QualifiedName)) });
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -42,7 +42,7 @@ public class ManagerTests
     [Fact]
     public void TimeTravel_RestoresPreviousState()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -72,7 +72,7 @@ public class ManagerTests
     public void TimeTravel_DoesNotRecordNewActions()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex(new[] { new DelegateMiddlewareBlex(ctx => seen.Add(ctx.ActionName)) });
+        var manager = new BlexManager(new[] { new BlexDelegateMiddleware(ctx => seen.Add(ctx.ActionName)) });
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -97,7 +97,7 @@ public class ManagerTests
     public void DevToolsSink_ReceivesInitAndSend()
     {
         var sink = new FakeDevTools();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
         manager.ConnectDevTools(sink);
@@ -113,7 +113,7 @@ public class ManagerTests
     public void DevTools_Reset_RestoresInitialState()
     {
         var sink = new FakeDevTools();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
         manager.ConnectDevTools(sink); // captures initial state (Count == 0)
@@ -134,7 +134,7 @@ public class ManagerTests
     public void DevTools_CommitThenRollback_RestoresCommittedState()
     {
         var sink = new FakeDevTools();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
         manager.ConnectDevTools(sink);
@@ -161,7 +161,7 @@ public class ManagerTests
     [Fact]
     public void DevTools_ImportState_RestoresLastComputedState()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -189,7 +189,7 @@ public class ManagerTests
         Assert.Equal(2, counter.Count);
     }
 
-    private sealed class FakeDevTools : IDevToolsBlex
+    private sealed class FakeDevTools : IBlexDevTools
     {
         public int InitCount { get; private set; }
         public List<string> Sent { get; } = new();

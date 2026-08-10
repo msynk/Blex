@@ -1,7 +1,7 @@
 @page "/counter"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject CounterStore Store
-@inject HistoryBlex History
+@inject BlexHistory History
 
 <PageTitle>Counter</PageTitle>
 
@@ -9,7 +9,7 @@
 
 <p>
     Reactive state, memoized computed values, and named actions &mdash; all generated from a few
-    annotated fields. This store is <code>[StoreAttributeBlex(Persist = true)]</code>, so its value survives a
+    annotated fields. This store is <code>[BlexStoreAttribute(Persist = true)]</code>, so its value survives a
     page reload (undo/redo writes back to storage too). Open the Redux DevTools panel to
     time-travel &mdash; actions now stream in with their argument payloads.
 </p>
@@ -52,7 +52,7 @@
             Batch: count=100, step=10
         </button>
         <button class="btn btn-sm btn-outline-danger" @onclick="Store.ResetState"
-                title="StoreBaseBlex.ResetState() returns to the initial registered state">
+                title="BlexStoreBase.ResetState() returns to the initial registered state">
             ResetState()
         </button>
     </div>
@@ -84,6 +84,6 @@
         });
 
     protected override void Dispose(bool disposing)
-        // HistoryBlex outlives this page; detach or every visit would leak a subscription.
+        // BlexHistory outlives this page; detach or every visit would leak a subscription.
         => History.Changed -= OnHistoryChanged;
 }

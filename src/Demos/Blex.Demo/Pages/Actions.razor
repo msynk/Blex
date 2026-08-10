@@ -1,5 +1,5 @@
 @page "/actions"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject CounterStore Counter
 
 <DocPage Href="actions" Title="Actions"
@@ -7,7 +7,7 @@
 
     <h2>The convention</h2>
     <p>
-        Mark a method named <code>OnXxx</code> with <code>[ActionAttributeBlex]</code>. The generator emits a
+        Mark a method named <code>OnXxx</code> with <code>[BlexActionAttribute]</code>. The generator emits a
         public <code>Xxx(...)</code> wrapper that runs your method inside a dispatch: all the
         mutations it makes are folded into one notification and one time-travel entry.
     </p>
@@ -18,7 +18,7 @@
     <h2>Naming</h2>
     <p>
         The wrapper name comes from the method name with the <code>On</code> prefix stripped, or from
-        <code>[ActionAttributeBlex(Name = "…")]</code>. The <code>Name</code> is used in two different ways
+        <code>[BlexActionAttribute(Name = "…")]</code>. The <code>Name</code> is used in two different ways
         depending on whether it is a valid C# identifier:
     </p>
 
@@ -26,9 +26,9 @@
         <table>
             <thead><tr><th>Declaration</th><th>Method you call</th><th>Label in DevTools / history</th></tr></thead>
             <tbody>
-                <tr><td><code>[ActionAttributeBlex] void OnIncrement()</code></td><td><code>Increment()</code></td><td><code>Increment</code></td></tr>
-                <tr><td><code>[ActionAttributeBlex(Name = "Bump")] void OnIncrement()</code></td><td><code>Bump()</code></td><td><code>Bump</code></td></tr>
-                <tr><td><code>[ActionAttributeBlex(Name = "Apply preset")] void OnApplyPreset()</code></td><td><code>ApplyPreset()</code></td><td><code>Apply preset</code></td></tr>
+                <tr><td><code>[BlexActionAttribute] void OnIncrement()</code></td><td><code>Increment()</code></td><td><code>Increment</code></td></tr>
+                <tr><td><code>[BlexActionAttribute(Name = "Bump")] void OnIncrement()</code></td><td><code>Bump()</code></td><td><code>Bump</code></td></tr>
+                <tr><td><code>[BlexActionAttribute(Name = "Apply preset")] void OnApplyPreset()</code></td><td><code>ApplyPreset()</code></td><td><code>Apply preset</code></td></tr>
             </tbody>
         </table>
     </div>
@@ -89,7 +89,7 @@
         </div>
         <div class="row" style="margin-top:0.9rem">
             <button class="btn btn-danger" @onclick="DirectAssignment">Two direct assignments</button>
-            <button class="btn btn-primary" @onclick="ViaAction">One [ActionAttributeBlex] method</button>
+            <button class="btn btn-primary" @onclick="ViaAction">One [BlexActionAttribute] method</button>
             <button class="btn btn-primary" @onclick="ViaBatch">One Batch(…) call</button>
             <button class="btn btn-ghost" @onclick="Counter.ResetState">ResetState()</button>
         </div>
@@ -128,7 +128,7 @@
     <CodeBlock Code="@Reset" />
 
     <p>
-        <code>ManagerBlex.ResetAll()</code> does the same across every registered store - the usual
+        <code>BlexManager.ResetAll()</code> does the same across every registered store - the usual
         sign-out move. Each store resets as its own action, so middleware can exempt individual
         stores and DevTools shows one entry per store rather than one opaque global wipe.
     </p>
@@ -136,7 +136,7 @@
 
     <h2>Async actions</h2>
     <p>
-        An <code>[ActionAttributeBlex]</code> may return <code>Task</code> or <code>ValueTask</code>. State changes
+        An <code>[BlexActionAttribute]</code> may return <code>Task</code> or <code>ValueTask</code>. State changes
         made before and after an <code>await</code> update the UI as they happen, but the whole
         operation is recorded as a single action.
     </p>
@@ -144,7 +144,7 @@
 
     <p>
         If what you are writing is a side-effect with a loading and error lifecycle, reach for
-        <a href="effects"><code>[EffectAttributeBlex]</code></a> instead - it generates all of that for you.
+        <a href="effects"><code>[BlexEffectAttribute]</code></a> instead - it generates all of that for you.
     </p>
 
     <Callout Kind="Callout.CalloutKind.Gotcha" Title="A store is owned by its in-flight async action">
@@ -162,7 +162,7 @@
             An <code>async void</code> action cannot be awaited or recorded correctly, so it is a
             hard error (<code>BLEX010</code>). Return <code>Task</code> or <code>ValueTask</code>.
             Similarly, an action that returns a <em>value</em> gets warning <code>BLEX011</code>,
-            because the generated wrapper discards it - put the result in a <code>[StateAttributeBlex]</code>
+            because the generated wrapper discards it - put the result in a <code>[BlexStateAttribute]</code>
             field instead.
         </p>
     </Callout>
@@ -188,7 +188,7 @@
     private int _lastBatchNotifications;
     private int _lastBatchActions;
 
-    [Inject] private ManagerBlex Manager { get; set; } = default!;
+    [Inject] private BlexManager Manager { get; set; } = default!;
 
     protected override void OnInitialized()
     {
@@ -224,15 +224,15 @@
         Counter.Step = 3;
     }));
 
-    // ComponentBaseBlex owns IDisposable; this is its hook for extra cleanup.
+    // BlexComponentBase owns IDisposable; this is its hook for extra cleanup.
     protected override void Dispose(bool disposing)
         => Counter.StateChanged -= CountNotification;
 
     private const string Basic = """
-        [ActionAttributeBlex]
+        [BlexActionAttribute]
         private void OnIncrement() => Count += Step;
 
-        [ActionAttributeBlex]
+        [BlexActionAttribute]
         private void OnReset()
         {
             Count = 0;   // both assignments are folded into
@@ -249,10 +249,10 @@
         """;
 
     private const string Args = """
-        [ActionAttributeBlex]
+        [BlexActionAttribute]
         private void OnSetStep(int step) => Step = step;
 
-        [ActionAttributeBlex]
+        [BlexActionAttribute]
         private void OnAddItem(string name, int quantity = 1) => /* ... */;
 
         // store.SetStep(5) is recorded as:
@@ -266,8 +266,8 @@
         Counter.Count = 10;
         Counter.Step = 5;
 
-        // 2. One [ActionAttributeBlex] method -> one action, one render.
-        [ActionAttributeBlex]
+        // 2. One [BlexActionAttribute] method -> one action, one render.
+        [BlexActionAttribute]
         private void OnApplyPreset(int count, int step)
         {
             Count = count;
@@ -304,7 +304,7 @@
         """;
 
     private const string ResetAll = """
-        @inject ManagerBlex Manager
+        @inject BlexManager Manager
 
         // Sign-out: every store back to its registered state, each as its own action.
         private void SignOut()
@@ -319,7 +319,7 @@
         """;
 
     private const string AsyncAction = """
-        [ActionAttributeBlex]
+        [BlexActionAttribute]
         private async Task OnSaveDraft(string text)
         {
             IsSaving = true;              // renders immediately

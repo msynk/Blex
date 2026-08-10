@@ -8,15 +8,15 @@ namespace Blex.Tests;
 /// <summary>
 /// The manager's public events sit directly on the dispatch path and are observed by persistence
 /// and undo/redo. A handler attached with a raw <c>+=</c> (or a throwing subscription filter) must
-/// be contained just like one registered through <see cref="ManagerBlex.Subscribe"/>.
+/// be contained just like one registered through <see cref="BlexManager.Subscribe"/>.
 /// </summary>
 public class PipelineIsolationTests
 {
     [Fact]
     public void ThrowingActionDispatchedHandler_DoesNotStarveLaterHandlers()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
         var store = new CounterStore();
         manager.Register(store);
 
@@ -36,11 +36,11 @@ public class PipelineIsolationTests
     [Fact]
     public void ThrowingActionDispatchedHandler_DoesNotBreakPersistenceOrHistory()
     {
-        var manager = new ManagerBlex { OnError = _ => { } };
+        var manager = new BlexManager { OnError = _ => { } };
         var store = new CounterStore();
         manager.Register(store);
 
-        var history = new HistoryBlex(manager);
+        var history = new BlexHistory(manager);
         manager.ActionDispatched += _ => throw new InvalidOperationException("observer boom");
         history.Start(); // registered *after* the thrower
 
@@ -54,8 +54,8 @@ public class PipelineIsolationTests
     [Fact]
     public void ThrowingSubscriptionFilter_IsIsolated()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
         var store = new CounterStore();
         manager.Register(store);
 
@@ -72,8 +72,8 @@ public class PipelineIsolationTests
     [Fact]
     public void ThrowingStateRestoredHandler_DoesNotStarveLaterHandlers()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
         var store = new CounterStore();
         manager.Register(store);
 
@@ -93,12 +93,12 @@ public class PipelineIsolationTests
     [Fact]
     public void ThrowingHistoryChangedHandler_DoesNotStarveLaterHandlers()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
         var store = new CounterStore();
         manager.Register(store);
 
-        using var history = new HistoryBlex(manager);
+        using var history = new BlexHistory(manager);
         history.Start();
 
         var after = 0;

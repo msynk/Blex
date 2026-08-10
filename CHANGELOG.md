@@ -19,7 +19,7 @@ All notable changes to Blex are documented here.
   threw `InvalidOperationException` at shutdown. It now implements `IDisposable` too, unsubscribing
   and handing pending state to storage without blocking a UI thread on the write.
 - **The prerender-to-interactive handoff had no error isolation.** It was the one restore path where
-  a failure escaped: a slice that would not apply threw straight out of `<ProviderBlex>`'s
+  a failure escaped: a slice that would not apply threw straight out of `<BlexProvider>`'s
   initialization and took down the whole application at startup - over a render optimization whose
   worst case is simply rendering twice. Failures are now contained per store and reported through
   `OnError` with the new source `"prerender"`, matching every other restore path. The same applies
@@ -32,7 +32,7 @@ All notable changes to Blex are documented here.
   private mode and disabled storage, logged a console warning and returned as if the write had
   succeeded - so the app went on believing state was saved that never was. The failure now reaches
   `OnError` with source `"persistence"` like every other non-fatal pipeline error.
-- **`EntityStateBlex`'s public constructor aliased the collections it was given.** A caller who kept
+- **`BlexEntityState`'s public constructor aliased the collections it was given.** A caller who kept
   a reference to the `Dictionary<,>` or list they passed could mutate an "immutable" state in place,
   and reference-based change detection would never notice. Both halves are now copied. The adapter's
   own internal path is unaffected.
@@ -104,7 +104,7 @@ All notable changes to Blex are documented here.
   unchanged. `Blex.Maui` adds `builder.AddBlexStore<T>()`, `builder.AddBlexHistory()` and
   `builder.AddBlexPreferencesPersistence()` on `MauiAppBuilder`, which register singletons.
 - **`BlexManager.GetStore(string name)`** - the counterpart to indexing `CaptureGlobalState()`.
-- **`EntityAdapterBlex.SetOne` / `SetMany`** replace an entity only when its id is already present -
+- **`BlexEntityAdapter.SetOne` / `SetMany`** replace an entity only when its id is already present -
   unlike `UpsertOne`, they never insert. A save response arriving after the user deleted the row no
   longer resurrects it. Matches Redux Toolkit's `setOne`/`setMany`.
 - **Write operations are now no-ops when the value is unchanged.** `SetAll` with an identical
@@ -112,46 +112,46 @@ All notable changes to Blex are documented here.
   replacement return the *same* state instance, so polling a list endpoint costs no notification, no
   persistence write and no undo step while the data is unchanged. `SetAll` compares after applying
   the sort comparer, so an unsorted-but-equivalent input is also free.
-- **A restored `EntityStateBlex` payload is reconciled instead of trusted.** Ids with no matching
+- **A restored `BlexEntityState` payload is reconciled instead of trusted.** Ids with no matching
   entity are dropped, entities missing from the id list are appended, and duplicate ids are
   collapsed - a hand-edited or partially written payload used to throw `KeyNotFoundException` deep
   inside a render.
-- **`HistoryBlex` takes an optional filter** deciding which actions earn their own undo step
+- **`BlexHistory` takes an optional filter** deciding which actions earn their own undo step
   (redux-undo's `filter`), plumbed through `AddBlexHistory` on both `IServiceCollection` and
   `MauiAppBuilder`. Without it, typing into a bound property records one undo step per keystroke. A
   filtered action still applies and still advances the present, so undo never lands on a state the
   user never saw; a throwing filter fails open and is reported through `OnError`.
-- **`PersistenceOptionsBlex.Partialize`** projects each store's snapshot on its way to storage
+- **`BlexPersistenceOptions.Partialize`** projects each store's snapshot on its way to storage
   (zustand's option of the same name), keeping transient fields out of storage; returning `null`
   skips that store's write and leaves what is stored untouched. Omitted keys rehydrate to their
   declared defaults rather than being wiped.
-- **`PersistenceOptionsBlex.OnRehydrated`** fires once per persistent store with the slice that was
+- **`BlexPersistenceOptions.OnRehydrated`** fires once per persistent store with the slice that was
   applied, or `null` when nothing was stored - enough to tell a returning user from a first visit.
-- **`PersistenceOptionsBlex.SkipHydration` + `StatePersistorBlex.RehydrateAsync()`** start saving
+- **`BlexPersistenceOptions.SkipHydration` + `BlexStatePersistor.RehydrateAsync()`** start saving
   without restoring, so per-user state can be applied after sign-in resolves. The restore itself is
   not an action, so it does not immediately write back.
-- **`ManagerBlex.ResetAll()`** resets every registered store to its registered state - Pinia's
+- **`BlexManager.ResetAll()`** resets every registered store to its registered state - Pinia's
   `$reset` across the whole tree. Each store resets as its own normal, vetoable, observable,
   persisted and time-travelable `ResetState` action, and a store that fails is reported and skipped
   rather than aborting the rest.
-- **`BLEX018`**: a `[StateAttributeBlex]`, `[ComputedAttributeBlex]`, `[ActionAttributeBlex]` or
-  `[EffectAttributeBlex]` member outside a `[StoreAttributeBlex]` class is now a warning. It is the
+- **`BLEX018`**: a `[BlexStateAttribute]`, `[BlexComputedAttribute]`, `[BlexActionAttribute]` or
+  `[BlexEffectAttribute]` member outside a `[BlexStoreAttribute]` class is now a warning. It is the
   one mistake that compiles cleanly and generates nothing at all, which reads like a broken
   generator.
 
-- **`[EffectAttributeBlex(DebounceMilliseconds = n)]`** gates an effect behind a quiet period - the
+- **`[BlexEffectAttribute(DebounceMilliseconds = n)]`** gates an effect behind a quiet period - the
   search-as-you-type case that previously meant hand-rolling a `CancellationTokenSource` and a
   `Task.Delay` in every store. The wait happens before anything observable, so a superseded
   invocation never flips `XxxIsLoading`, never clears `XxxError`, is never offered to middleware and
   records no action: a spinner bound to `IsLoading` no longer blinks once per keystroke, and
   DevTools no longer fills with searches that never happened. Composes with `Concurrency`, which
   still governs the invocations that survive the gate. A negative value is `BLEX019`.
-- **`HistoryBlex.Checkpoint(label)`** commits the current state as an undo boundary on demand. A
+- **`BlexHistory.Checkpoint(label)`** commits the current state as an undo boundary on demand. A
   filter alone leaves filtered work with no boundary of its own, so the next recorded action
   swallows a whole typed edit; a checkpoint marks the points the user would actually step back to.
   Consecutive checkpoints over unchanged state collapse, so a debounced "stopped typing" timer can
   call it freely.
-- **`ManagerBlex.Subscribe<T>(selector, onChanged, comparer, fireImmediately)`** - the cross-store
+- **`BlexManager.Subscribe<T>(selector, onChanged, comparer, fireImmediately)`** - the cross-store
   counterpart to the store-level selector subscription, in both `Action<T>` and `Action<T, T>`
   shapes. Without it a value derived from two stores had to be recomputed on every action of every
   store.
@@ -161,15 +161,15 @@ All notable changes to Blex are documented here.
   time-travel entry and is not written straight back (which would bounce the same value between
   tabs) - and is migrated exactly as it is at startup, so a tab on an older build still reads what
   a newer one wrote. `options.OnExternalChange` reports it. Backed by the browser's `storage` event
-  in `BrowserStorageBlex`; any storage can opt in via the new `IExternalStorageChangeBlex`.
-- **`TestHarnessBlex.WithFilter<TStore>(predicate)` and `WithMiddleware<TStore>(...)`** create a
+  in `BlexBrowserStorage`; any storage can opt in via the new `IBlexExternalStorageChange`.
+- **`BlexTestHarness.WithFilter<TStore>(predicate)` and `WithMiddleware<TStore>(...)`** create a
   harness whose manager runs the given pipeline. Testing a store together with the veto filter that
   wraps it in production previously meant abandoning the harness and hand-wiring a manager - exactly
   the setup the harness exists to remove.
 
 ### Changed
 
-- **`EntityAdapterBlex.UpdateMany` and `Map` are no longer quadratic.** Each delegated to
+- **`BlexEntityAdapter.UpdateMany` and `Map` are no longer quadratic.** Each delegated to
   `UpdateOne` per id, which copies the whole entity map (and re-sorts it when a comparer is
   configured) every time - so a bulk update over `n` entities did `n` full copies, on precisely the
   operation most likely to run over a large collection. They now apply in one pass over a single
@@ -177,7 +177,7 @@ All notable changes to Blex are documented here.
 - **`ResetState()` on a store already holding its initial state is now a no-op.** It used to notify
   every subscriber, write to storage and push an undo entry for a mutation that never happened,
   contradicting the rule every other mutation path follows.
-- **`OptionsBlex.RedactDevToolsKeys` is additive and composes.** Calling it more than once widens
+- **`BlexOptions.RedactDevToolsKeys` is additive and composes.** Calling it more than once widens
   the redaction set instead of replacing it, and a `DevToolsStateSanitizer` assigned *before* the
   call still runs. A redaction helper that silently dropped previously registered keys fails open -
   the one thing it must not do. (Assigning `DevToolsStateSanitizer` *after* the call still replaces

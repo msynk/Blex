@@ -24,7 +24,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task OnlyTheLastInvocationOfABurstRuns()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
         var store = harness.Store;
 
         await Task.WhenAll(store.TypeAhead("a"), store.TypeAhead("ab"), store.TypeAhead("abc"));
@@ -37,7 +37,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task SupersededInvocationsRecordNoAction()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
         var store = harness.Store;
 
         await Task.WhenAll(store.TypeAhead("a"), store.TypeAhead("ab"));
@@ -50,7 +50,7 @@ public class EffectDebounceTests
     public async Task SupersededInvocationsAreNeverOfferedToMiddleware()
     {
         var seen = new List<string>();
-        using var harness = TestHarnessBlex.WithFilter<EffectConcurrencyStore>(ctx =>
+        using var harness = BlexTestHarness.WithFilter<EffectConcurrencyStore>(ctx =>
         {
             seen.Add(ctx.ActionName);
             return true;
@@ -64,7 +64,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task LoadingStaysFalseWhileTheGateIsWaiting()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
         var store = harness.Store;
         var gate = new TaskCompletionSource();
         store.Gates.Enqueue(gate);
@@ -86,7 +86,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task ASupersededInvocationDoesNotClearAPreviousError()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
         var store = harness.Store;
 
         await store.DebouncedBoom();
@@ -105,7 +105,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task InvocationsSpacedApartEachRun()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
         var store = harness.Store;
 
         await store.TypeAhead("first");
@@ -119,7 +119,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task AVetoIsStillHonoured_AfterTheGateElapses()
     {
-        using var harness = TestHarnessBlex.WithFilter<EffectConcurrencyStore>(
+        using var harness = BlexTestHarness.WithFilter<EffectConcurrencyStore>(
             ctx => ctx.ActionName != "TypeAhead");
 
         await harness.Store.TypeAhead("a");
@@ -131,7 +131,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task DebounceComposesWithLatest_CancellingARequestAlreadyInFlight()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
         var store = harness.Store;
         var first = new TaskCompletionSource();
         var second = new TaskCompletionSource();
@@ -163,7 +163,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task ANewBurstAfterCompletionStartsCleanly()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
         var store = harness.Store;
 
         await Task.WhenAll(store.TypeAhead("a"), store.TypeAhead("ab"));
@@ -176,7 +176,7 @@ public class EffectDebounceTests
     [Fact]
     public async Task AThrowingBodyStillReportsThroughXxxError()
     {
-        using var harness = TestHarnessBlex.For<EffectConcurrencyStore>();
+        using var harness = BlexTestHarness.For<EffectConcurrencyStore>();
 
         await harness.Store.DebouncedBoom();
 

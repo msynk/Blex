@@ -28,10 +28,10 @@ public static class DocsNav
         ]),
         new("Core concepts",
         [
-            new("stores", "Stores & state", "[StoreAttributeBlex] and [StateAttributeBlex]: the reactive container and its fields."),
-            new("computed", "Computed state", "[ComputedAttributeBlex]: memoized derived values that invalidate themselves."),
-            new("actions", "Actions", "[ActionAttributeBlex], batching, direct assignment, Batch and ResetState."),
-            new("effects", "Effects", "[EffectAttributeBlex]: async work with generated loading, error and cancellation."),
+            new("stores", "Stores & state", "[BlexStoreAttribute] and [BlexStateAttribute]: the reactive container and its fields."),
+            new("computed", "Computed state", "[BlexComputedAttribute]: memoized derived values that invalidate themselves."),
+            new("actions", "Actions", "[BlexActionAttribute], batching, direct assignment, Batch and ResetState."),
+            new("effects", "Effects", "[BlexEffectAttribute]: async work with generated loading, error and cancellation."),
         ]),
         new("Reacting to state",
         [

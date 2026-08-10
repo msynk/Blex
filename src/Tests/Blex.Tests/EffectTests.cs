@@ -52,7 +52,7 @@ public class EffectTests
     public async Task Effect_RecordsExactlyOneAction()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex(new[] { new DelegateMiddlewareBlex(c => seen.Add(c.ActionName)) });
+        var manager = new BlexManager(new[] { new BlexDelegateMiddleware(c => seen.Add(c.ActionName)) });
         var store = new DataStore();
         manager.Register(store);
 

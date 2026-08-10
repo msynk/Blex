@@ -8,7 +8,7 @@ namespace Blex.Tests;
 
 public class PersistenceTests
 {
-    private sealed class InMemoryStorage : IStorageBlex
+    private sealed class InMemoryStorage : IBlexStorage
     {
         public Dictionary<string, string> Data { get; } = new();
 
@@ -39,10 +39,10 @@ public class PersistenceTests
     public async Task Persistor_SavesPersistentStore_AfterAction()
     {
         var storage = new InMemoryStorage();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var settings = new SettingsStore();
         manager.Register(settings);
-        var persistor = new StatePersistorBlex(manager, storage);
+        var persistor = new BlexStatePersistor(manager, storage);
         await persistor.StartAsync();
 
         settings.SetTheme("dark");
@@ -55,10 +55,10 @@ public class PersistenceTests
     public async Task Persistor_DoesNotSave_NonPersistentStore()
     {
         var storage = new InMemoryStorage();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
-        var persistor = new StatePersistorBlex(manager, storage);
+        var persistor = new BlexStatePersistor(manager, storage);
         await persistor.StartAsync();
 
         counter.Increment();
@@ -72,10 +72,10 @@ public class PersistenceTests
         var storage = new InMemoryStorage();
         storage.Data["blex:settings"] = "{\"Theme\":\"dark\",\"FontSize\":20}";
 
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var settings = new SettingsStore();
         manager.Register(settings);
-        var persistor = new StatePersistorBlex(manager, storage);
+        var persistor = new BlexStatePersistor(manager, storage);
 
         await persistor.StartAsync();
 
@@ -90,10 +90,10 @@ public class PersistenceTests
         storage.Data["blex:settings"] = "{\"Theme\":\"dark\"}";
 
         var seen = new List<string>();
-        var manager = new ManagerBlex(new[] { new DelegateMiddlewareBlex(c => seen.Add(c.ActionName)) });
+        var manager = new BlexManager(new[] { new BlexDelegateMiddleware(c => seen.Add(c.ActionName)) });
         var settings = new SettingsStore();
         manager.Register(settings);
-        var persistor = new StatePersistorBlex(manager, storage);
+        var persistor = new BlexStatePersistor(manager, storage);
 
         await persistor.StartAsync();
 
@@ -105,10 +105,10 @@ public class PersistenceTests
     public async Task Persistor_Clear_RemovesPersistedSlice()
     {
         var storage = new InMemoryStorage();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var settings = new SettingsStore();
         manager.Register(settings);
-        var persistor = new StatePersistorBlex(manager, storage);
+        var persistor = new BlexStatePersistor(manager, storage);
         await persistor.StartAsync();
 
         settings.SetTheme("dark");
@@ -122,10 +122,10 @@ public class PersistenceTests
     public async Task Persistor_CustomKeyPrefix_IsUsed()
     {
         var storage = new InMemoryStorage();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var settings = new SettingsStore();
         manager.Register(settings);
-        var persistor = new StatePersistorBlex(manager, storage, new PersistenceOptionsBlex { KeyPrefix = "app." });
+        var persistor = new BlexStatePersistor(manager, storage, new BlexPersistenceOptions { KeyPrefix = "app." });
         await persistor.StartAsync();
 
         settings.SetTheme("dark");

@@ -10,7 +10,7 @@ public class TestingHarnessTests
     [Fact]
     public void Harness_RecordsActions()
     {
-        using var harness = TestHarnessBlex.For<CounterStore>();
+        using var harness = BlexTestHarness.For<CounterStore>();
 
         harness.Store.Increment();
         harness.Store.Add(5);
@@ -23,7 +23,7 @@ public class TestingHarnessTests
     [Fact]
     public void Harness_TracksQualifiedNamesAndCounts()
     {
-        using var harness = TestHarnessBlex.For<CounterStore>();
+        using var harness = BlexTestHarness.For<CounterStore>();
 
         harness.Store.Increment();
         harness.Store.Increment();
@@ -35,7 +35,7 @@ public class TestingHarnessTests
     [Fact]
     public void Harness_SnapshotReflectsState()
     {
-        using var harness = TestHarnessBlex.For<CounterStore>();
+        using var harness = BlexTestHarness.For<CounterStore>();
         harness.Store.Add(7);
 
         var snap = harness.Snapshot();
@@ -46,7 +46,7 @@ public class TestingHarnessTests
     [Fact]
     public async Task Harness_RecordsAsyncEffectAsSingleAction()
     {
-        using var harness = TestHarnessBlex.For<DataStore>();
+        using var harness = BlexTestHarness.For<DataStore>();
 
         await harness.Store.Load("hi");
 
@@ -56,7 +56,7 @@ public class TestingHarnessTests
     [Fact]
     public void RecordActions_Extension_WorksOnManager()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
         using var log = manager.RecordActions();

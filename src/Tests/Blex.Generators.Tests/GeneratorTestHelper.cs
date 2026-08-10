@@ -5,7 +5,7 @@ using Blex.Generators;
 
 namespace Blex.Generators.Tests;
 
-/// <summary>Drives <see cref="GeneratorBlex"/> over an in-memory compilation.</summary>
+/// <summary>Drives <see cref="BlexGenerator"/> over an in-memory compilation.</summary>
 public static class GeneratorTestHelper
 {
     private static readonly ImmutableArray<MetadataReference> References = BuildReferences();
@@ -22,8 +22,8 @@ public static class GeneratorTestHelper
                 references.Add(MetadataReference.CreateFromFile(path));
         }
 
-        // The Blex runtime (attributes, StoreBaseBlex, ...).
-        references.Add(MetadataReference.CreateFromFile(typeof(StoreAttributeBlex).Assembly.Location));
+        // The Blex runtime (attributes, BlexStoreBase, ...).
+        references.Add(MetadataReference.CreateFromFile(typeof(BlexStoreAttribute).Assembly.Location));
         return references.ToImmutable();
     }
 
@@ -53,7 +53,7 @@ public static class GeneratorTestHelper
             References,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
 
-        GeneratorDriver driver = CSharpGeneratorDriver.Create(new GeneratorBlex());
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new BlexGenerator());
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var updated, out _);
 
         var runResult = driver.GetRunResult();

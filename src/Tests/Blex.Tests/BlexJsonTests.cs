@@ -14,7 +14,7 @@ namespace Blex.Tests;
 [CollectionDefinition(nameof(BlexJsonTests), DisableParallelization = true)]
 public class BlexJsonTests : IDisposable
 {
-    public void Dispose() => JsonBlex.Reset();
+    public void Dispose() => BlexJson.Reset();
 
     private sealed class UpperCaseStringConverter : JsonConverter<string>
     {
@@ -32,7 +32,7 @@ public class BlexJsonTests : IDisposable
         // would throw, which is exactly what Configure exists to avoid.
         _ = new CounterStore().SerializeState();
 
-        JsonBlex.Configure(o => o.Converters.Add(new UpperCaseStringConverter()));
+        BlexJson.Configure(o => o.Converters.Add(new UpperCaseStringConverter()));
 
         var store = new CounterStore();
         store.Label = "idle";
@@ -42,33 +42,33 @@ public class BlexJsonTests : IDisposable
     [Fact]
     public void Configure_LeavesTheDefaultsIntact()
     {
-        JsonBlex.Configure(o => o.WriteIndented = true);
+        BlexJson.Configure(o => o.WriteIndented = true);
 
-        Assert.True(JsonBlex.Options.WriteIndented);
-        Assert.True(JsonBlex.Options.PropertyNameCaseInsensitive);
-        Assert.Contains(JsonBlex.Options.Converters, c => c is JsonStringEnumConverter);
+        Assert.True(BlexJson.Options.WriteIndented);
+        Assert.True(BlexJson.Options.PropertyNameCaseInsensitive);
+        Assert.Contains(BlexJson.Options.Converters, c => c is JsonStringEnumConverter);
     }
 
     [Fact]
     public void Configure_DoesNotMutateThePreviousInstance()
     {
-        var before = JsonBlex.Options;
-        JsonBlex.Configure(o => o.WriteIndented = true);
+        var before = BlexJson.Options;
+        BlexJson.Configure(o => o.WriteIndented = true);
 
-        Assert.NotSame(before, JsonBlex.Options);
+        Assert.NotSame(before, BlexJson.Options);
         Assert.False(before.WriteIndented);
     }
 
     [Fact]
     public void Configure_RejectsNull()
-        => Assert.Throws<ArgumentNullException>(() => JsonBlex.Configure(null!));
+        => Assert.Throws<ArgumentNullException>(() => BlexJson.Configure(null!));
 
     [Fact]
     public void Reset_RestoresTheDefaults()
     {
-        JsonBlex.Configure(o => o.WriteIndented = true);
-        JsonBlex.Reset();
+        BlexJson.Configure(o => o.WriteIndented = true);
+        BlexJson.Reset();
 
-        Assert.False(JsonBlex.Options.WriteIndented);
+        Assert.False(BlexJson.Options.WriteIndented);
     }
 }

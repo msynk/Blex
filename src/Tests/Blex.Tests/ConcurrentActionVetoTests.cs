@@ -8,7 +8,7 @@ namespace Blex.Tests;
 
 /// <summary>
 /// A veto filter guards every action, including one dispatched while another asynchronous action of
-/// the same store is still awaiting. <c>EffectConcurrencyBlex.Parallel</c> is the default, so overlapping
+/// the same store is still awaiting. <c>BlexEffectConcurrency.Parallel</c> is the default, so overlapping
 /// effects are the common case rather than an exotic one.
 /// </summary>
 public class ConcurrentActionVetoTests
@@ -17,7 +17,7 @@ public class ConcurrentActionVetoTests
     public async Task VetoApplies_ToAnActionStartedWhileAnotherIsInFlight()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx =>
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx =>
         {
             seen.Add(ctx.ActionName);
             return ctx.ActionName != "Quick";
@@ -41,7 +41,7 @@ public class ConcurrentActionVetoTests
     public async Task OverlappingActions_AreEachOfferedToTheFilter()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx => { seen.Add(ctx.ActionName); return true; })]);
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx => { seen.Add(ctx.ActionName); return true; })]);
 
         var store = new GatedStore();
         manager.Register(store);
@@ -61,7 +61,7 @@ public class ConcurrentActionVetoTests
         // The batch already passed the filters; a mutation it starts is part of it and must not
         // be re-offered (nor separately vetoable).
         var seen = new List<string>();
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx => { seen.Add(ctx.ActionName); return true; })]);
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx => { seen.Add(ctx.ActionName); return true; })]);
 
         var store = new GatedStore();
         manager.Register(store);
@@ -77,7 +77,7 @@ public class ConcurrentActionVetoTests
     [Fact]
     public async Task VetoedAction_RecordsNothingAndLeavesStateAlone()
     {
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx => ctx.ActionName != "Quick")]);
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx => ctx.ActionName != "Quick")]);
         var store = new GatedStore();
         manager.Register(store);
 
@@ -99,7 +99,7 @@ public class ConcurrentActionVetoTests
     {
         // The outer batch owns the veto decision; its nested sync mutations must not re-enter it.
         var seen = new List<string>();
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx => { seen.Add(ctx.ActionName); return true; })]);
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx => { seen.Add(ctx.ActionName); return true; })]);
 
         var store = new CounterStore();
         manager.Register(store);

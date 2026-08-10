@@ -86,90 +86,90 @@
         new("BLEX001", "Store class must be partial", true,
             "The generator adds members through a second partial declaration, so the class has to be <code>partial</code>.",
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public class CounterStore   // BLEX001
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
             }
             """,
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class CounterStore
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
             }
             """),
 
         new("BLEX002", "Cannot derive action name", true,
             "An action or effect method must either start with <code>On</code> followed by an uppercase letter, or supply a usable <code>Name</code>. Note that a <code>Name</code> containing spaces is treated as a display label only, so the method still needs the <code>On</code> prefix.",
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void Increment() { }              // BLEX002 -- no "On" prefix
 
-            [ActionAttributeBlex(Name = "Apply preset")]
+            [BlexActionAttribute(Name = "Apply preset")]
             private void ApplyPreset() { }            // BLEX002 -- label only, still no "On"
             """,
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnIncrement() { }            // -> Increment()
 
-            [ActionAttributeBlex(Name = "Bump")]
+            [BlexActionAttribute(Name = "Bump")]
             private void Increment() { }              // -> Bump()   (valid identifier)
 
-            [ActionAttributeBlex(Name = "Apply preset")]
+            [BlexActionAttribute(Name = "Apply preset")]
             private void OnApplyPreset() { }          // -> ApplyPreset(), labelled "Apply preset"
             """),
 
         new("BLEX003", "Cannot derive computed name", true,
             "A computed method's name must start with <code>Compute</code> or <code>Get</code> and have something after it.",
             """
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private int DoubleCount() => Count * 2;   // BLEX003
             """,
             """
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private int ComputeDoubleCount() => Count * 2;   // -> DoubleCount
 
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private int GetDoubleCount() => Count * 2;       // -> DoubleCount
             """),
 
         new("BLEX004", "Computed method must be parameterless", true,
             "A computed value backs a property, so there is nowhere to pass arguments. Use an ordinary method for a parameterised projection.",
             """
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private int ComputeTotalFor(int rate) => Count * rate;   // BLEX004
             """,
             """
-            [ComputedAttributeBlex]
-            private int ComputeTotal() => Count * Rate;   // rate lives in [StateAttributeBlex]
+            [BlexComputedAttribute]
+            private int ComputeTotal() => Count * Rate;   // rate lives in [BlexStateAttribute]
 
-            // ... or just a plain method, with no [ComputedAttributeBlex] and no memoization:
+            // ... or just a plain method, with no [BlexComputedAttribute] and no memoization:
             private int TotalFor(int rate) => Count * rate;
             """),
 
         new("BLEX005", "Generated member name collides", true,
-            "Two generated members would share a name, or a generated member would collide with something you already declared or with a <code>StoreBaseBlex</code> member. The check covers the memoization backing fields (<code>__XxxValid</code>, <code>__XxxValue</code>) and the effect fields (<code>__XxxPending</code>, <code>__XxxError</code>, <code>__XxxCts</code>, …) too.",
+            "Two generated members would share a name, or a generated member would collide with something you already declared or with a <code>BlexStoreBase</code> member. The check covers the memoization backing fields (<code>__XxxValid</code>, <code>__XxxValue</code>) and the effect fields (<code>__XxxPending</code>, <code>__XxxError</code>, <code>__XxxCts</code>, …) too.",
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class Store
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
 
-                [ComputedAttributeBlex] private int ComputeCount() => 0;   // BLEX005 -- both want "Count"
+                [BlexComputedAttribute] private int ComputeCount() => 0;   // BLEX005 -- both want "Count"
 
-                [ActionAttributeBlex] private void OnBatch() { }           // BLEX005 -- StoreBaseBlex.Batch
+                [BlexActionAttribute] private void OnBatch() { }           // BLEX005 -- BlexStoreBase.Batch
             }
             """,
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class Store
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
 
-                [ComputedAttributeBlex] private int ComputeDoubled() => Count * 2;
+                [BlexComputedAttribute] private int ComputeDoubled() => Count * 2;
 
-                [ActionAttributeBlex] private void OnApplyAll() { }
+                [BlexActionAttribute] private void OnApplyAll() { }
             }
             """),
 
@@ -178,64 +178,64 @@
             """
             public class Outer
             {
-                [StoreAttributeBlex]
+                [BlexStoreAttribute]
                 public partial class Inner { }        // BLEX006 -- nested
             }
 
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class Cache<T> { }         // BLEX006 -- generic
             """,
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class Inner { }            // top level
 
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class StringCache { }      // closed over a concrete type
             """),
 
         new("BLEX007", "Effect method must return Task or ValueTask", true,
             "An effect owns the loading and error lifecycle, so it cannot hand back a result. Non-generic <code>Task</code> or <code>ValueTask</code> only.",
             """
-            [EffectAttributeBlex]
+            [BlexEffectAttribute]
             private async Task<User> OnLoadUser(int id) => await _api.GetAsync(id);   // BLEX007
 
-            [EffectAttributeBlex]
+            [BlexEffectAttribute]
             private void OnLoadUser(int id) { }                                       // BLEX007
             """,
             """
-            [EffectAttributeBlex]
+            [BlexEffectAttribute]
             private async Task OnLoadUser(int id)
             {
-                User = await _api.GetAsync(id);   // results go into [StateAttributeBlex]
+                User = await _api.GetAsync(id);   // results go into [BlexStateAttribute]
             }
             """),
 
         new("BLEX008", "Blex member must be a writable instance member", true,
-            "<code>[StateAttributeBlex]</code>, <code>[ComputedAttributeBlex]</code>, <code>[ActionAttributeBlex]</code> and <code>[EffectAttributeBlex]</code> members are per-instance and must be assignable. <code>static</code>, <code>const</code> and <code>readonly</code> are rejected.",
+            "<code>[BlexStateAttribute]</code>, <code>[BlexComputedAttribute]</code>, <code>[BlexActionAttribute]</code> and <code>[BlexEffectAttribute]</code> members are per-instance and must be assignable. <code>static</code>, <code>const</code> and <code>readonly</code> are rejected.",
             """
-            [StateAttributeBlex] private static int _count;      // BLEX008
-            [StateAttributeBlex] private readonly int _max = 10; // BLEX008
+            [BlexStateAttribute] private static int _count;      // BLEX008
+            [BlexStateAttribute] private readonly int _max = 10; // BLEX008
 
-            [ActionAttributeBlex] private static void OnReset() { }   // BLEX008
+            [BlexActionAttribute] private static void OnReset() { }   // BLEX008
             """,
             """
-            [StateAttributeBlex] private int _count;
+            [BlexStateAttribute] private int _count;
 
             // Constants that are not state need no attribute:
             private const int Max = 10;
 
-            [ActionAttributeBlex] private void OnReset() => Count = 0;
+            [BlexActionAttribute] private void OnReset() => Count = 0;
             """),
 
         new("BLEX009", "Latest effect cannot cancel without a CancellationToken", false,
             "<code>Latest</code> marks the superseded run stale so it cannot overwrite newer state - but without a token the superseded body keeps running to completion, because nothing can observe the cancellation.",
             """
-            [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+            [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
             private async Task OnSearch(string query)          // BLEX009 (warning)
                 => Results = await _api.SearchAsync(query);
             """,
             """
-            [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+            [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
             private async Task OnSearch(string query, CancellationToken ct)
                 => Results = await _api.SearchAsync(query, ct);
             """),
@@ -243,26 +243,26 @@
         new("BLEX010", "Action must not be 'async void'", true,
             "An <code>async void</code> method cannot be awaited, so the dispatch pipeline cannot know when it finished or record it correctly.",
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private async void OnSave() => await _api.SaveAsync();   // BLEX010
             """,
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private async Task OnSave() => await _api.SaveAsync();
 
             // ... or, if it has a loading/error lifecycle:
-            [EffectAttributeBlex]
+            [BlexEffectAttribute]
             private async Task OnSave() => await _api.SaveAsync();
             """),
 
         new("BLEX011", "Action return value is discarded", false,
             "The generated wrapper returns <code>void</code> (or <code>Task</code>), so any value the implementation returns is silently dropped.",
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private int OnIncrement() => ++Count;   // BLEX011 (warning) -- the caller never sees it
             """,
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnIncrement() => Count++;
 
             // Callers read the result from state:
@@ -273,24 +273,24 @@
         new("BLEX012", "State field name equals generated property name", true,
             "The property is derived by trimming a leading underscore and capitalizing. A field already in that form would collide with its own property.",
             """
-            [StateAttributeBlex] private int Count;    // BLEX012 -- the property would also be "Count"
+            [BlexStateAttribute] private int Count;    // BLEX012 -- the property would also be "Count"
             """,
             """
-            [StateAttributeBlex] private int _count;   // -> Count
-            [StateAttributeBlex] private int count;    // -> Count  (also fine)
+            [BlexStateAttribute] private int _count;   // -> Count
+            [BlexStateAttribute] private int count;    // -> Count  (also fine)
             """),
 
         new("BLEX013", "Unsupported parameter modifier", true,
             "The wrapper captures arguments by value so they can travel as the action payload, which is impossible for a by-ref parameter.",
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnTryParse(string text, out int value)   // BLEX013
             {
                 int.TryParse(text, out value);
             }
             """,
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnParse(string text)
                 => Value = int.TryParse(text, out var value) ? value : 0;
             """),
@@ -298,31 +298,31 @@
         new("BLEX014", "Generic action/effect methods are not supported", true,
             "The generated wrapper cannot carry type parameters.",
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnSet<T>(T value) { }        // BLEX014
             """,
             """
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnSetName(string value) => Name = value;
 
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnSetCount(int value) => Count = value;
             """),
 
         new("BLEX015", "Store must be a plain class", true,
             "Records get value-equality members and a synthesized clone, which fight the mutable reactive-container model a store needs.",
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial record CounterStore        // BLEX015
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
             }
             """,
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class CounterStore
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
             }
 
             // Records are ideal for the values *inside* state:
@@ -330,80 +330,80 @@
             """),
 
         new("BLEX016", "Store cannot have another base class", true,
-            "The generated partial adds <code>: Blex.StoreBaseBlex</code>. A different base class would make the type inherit from two classes.",
+            "The generated partial adds <code>: Blex.BlexStoreBase</code>. A different base class would make the type inherit from two classes.",
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class CounterStore : MyBaseViewModel   // BLEX016
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
             }
             """,
             """
             // Compose instead of inheriting -- or implement an interface, which is fine.
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class CounterStore : ICounter
             {
                 private readonly MyHelper _helper = new();
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
             }
 
-            // Explicitly deriving from StoreBaseBlex is also accepted:
-            [StoreAttributeBlex]
-            public partial class CounterStore : StoreBaseBlex { }
+            // Explicitly deriving from BlexStoreBase is also accepted:
+            [BlexStoreAttribute]
+            public partial class CounterStore : BlexStoreBase { }
             """),
 
         new("BLEX017", "Computed method must return a value", true,
             "A computed backs a memoized property, so there has to be something to memoize; a <code>void</code> method would emit <code>public void Xxx { get; }</code>, which does not compile.",
             """
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private void ComputeSummary() { }         // BLEX017
             """,
             """
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private string ComputeSummary() => $"{Count} items";
 
             // Something that only performs work (no value) is an action, not a computed:
-            [ActionAttributeBlex]
+            [BlexActionAttribute]
             private void OnRefreshSummary() { }
             """),
 
         new("BLEX018", "Blex member attribute outside a store", false,
-            "A <code>[StateAttributeBlex]</code>, <code>[ComputedAttributeBlex]</code>, <code>[ActionAttributeBlex]</code> or <code>[EffectAttributeBlex]</code> member only means something inside a <code>[StoreAttributeBlex]</code> class. Outside one it compiles cleanly and generates nothing at all - which reads exactly like a broken generator, so this warning says so instead.",
+            "A <code>[BlexStateAttribute]</code>, <code>[BlexComputedAttribute]</code>, <code>[BlexActionAttribute]</code> or <code>[BlexEffectAttribute]</code> member only means something inside a <code>[BlexStoreAttribute]</code> class. Outside one it compiles cleanly and generates nothing at all - which reads exactly like a broken generator, so this warning says so instead.",
             """
-            // Forgot the [StoreAttributeBlex] -- Count never appears.
+            // Forgot the [BlexStoreAttribute] -- Count never appears.
             public partial class CounterStore
             {
-                [StateAttributeBlex] private int _count;    // BLEX018
+                [BlexStateAttribute] private int _count;    // BLEX018
             }
 
             // Same for a type nested inside a store: the nested type is not itself a store.
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class OuterStore
             {
-                [StateAttributeBlex] private int _count;
-                public class Inner { [StateAttributeBlex] private int _x; }   // BLEX018
+                [BlexStateAttribute] private int _count;
+                public class Inner { [BlexStateAttribute] private int _x; }   // BLEX018
             }
             """,
             """
-            [StoreAttributeBlex]
+            [BlexStoreAttribute]
             public partial class CounterStore
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
             }
             """),
 
         new("BLEX019", "Effect debounce cannot be negative", true,
             "<code>DebounceMilliseconds</code> becomes a <code>Task.Delay</code> in the generated wrapper, which rejects a negative delay at runtime - from inside generated code, where the stack trace explains nothing. Use <code>0</code> to disable debouncing.",
             """
-            [EffectAttributeBlex(DebounceMilliseconds = -1)]      // BLEX019
+            [BlexEffectAttribute(DebounceMilliseconds = -1)]      // BLEX019
             private async Task OnSearch(string query) { }
             """,
             """
-            [EffectAttributeBlex(DebounceMilliseconds = 300)]
+            [BlexEffectAttribute(DebounceMilliseconds = 300)]
             private async Task OnSearch(string query) { }
 
             // 0 (the default) means "no debouncing":
-            [EffectAttributeBlex]
+            [BlexEffectAttribute]
             private async Task OnSearch(string query) { }
             """),
     ];
@@ -416,7 +416,7 @@
 
     private const string SuppressLocal = """
         #pragma warning disable BLEX011
-        [ActionAttributeBlex] private int OnIncrement() => ++Count;
+        [BlexActionAttribute] private int OnIncrement() => ++Count;
         #pragma warning restore BLEX011
         """;
 }

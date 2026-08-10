@@ -14,8 +14,8 @@ public class DuplicateStoreNameTests
     [Fact]
     public void RegisteringTwoStoresWithTheSameName_ReportsAnError()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
 
         manager.Register(new CounterStore());
         manager.Register(new CounterStore()); // both are named "counter"
@@ -29,8 +29,8 @@ public class DuplicateStoreNameTests
     [Fact]
     public void RegisteringTheSameInstanceTwice_IsSilentlyIdempotent()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
         var store = new CounterStore();
 
         manager.Register(store);
@@ -43,8 +43,8 @@ public class DuplicateStoreNameTests
     [Fact]
     public void DistinctNames_ReportNothing()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
 
         manager.Register(new CounterStore());
         manager.Register(new SettingsStore());
@@ -55,8 +55,8 @@ public class DuplicateStoreNameTests
     [Fact]
     public void ReRegisteringAfterUnregister_ReportsNothing()
     {
-        var errors = new List<ErrorBlex>();
-        var manager = new ManagerBlex { OnError = errors.Add };
+        var errors = new List<BlexError>();
+        var manager = new BlexManager { OnError = errors.Add };
         var first = new CounterStore();
 
         manager.Register(first);

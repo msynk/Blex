@@ -1,5 +1,5 @@
 @page "/effects"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject EffectLabStore Lab
 @inject SearchStore Search
 
@@ -9,14 +9,14 @@
     <h2>The convention</h2>
     <p>
         Mark an async method named <code>OnXxx</code> returning <code>Task</code> or
-        <code>ValueTask</code> with <code>[EffectAttributeBlex]</code>. You get a public <code>Xxx(...)</code>
+        <code>ValueTask</code> with <code>[BlexEffectAttribute]</code>. You get a public <code>Xxx(...)</code>
         wrapper plus reactive lifecycle properties. The body is still recorded as one named,
         time-travelable action.
     </p>
 
     <CodeBlock Code="@Basic" />
 
-    <ApiTable Title="Generated for [EffectAttributeBlex] OnLoadUser(int id, CancellationToken ct)" Rows="@GeneratedRows" />
+    <ApiTable Title="Generated for [BlexEffectAttribute] OnLoadUser(int id, CancellationToken ct)" Rows="@GeneratedRows" />
 
     <p>
         The wrapper never throws: an exception from the body is captured into <code>XxxError</code>
@@ -53,7 +53,7 @@
 
     <h2>Concurrency</h2>
     <p>
-        <code>[EffectAttributeBlex(Concurrency = …)]</code> decides what happens when a run starts while another
+        <code>[BlexEffectAttribute(Concurrency = …)]</code> decides what happens when a run starts while another
         is still going, mirroring the RxJS flattening operators NgRx effects are built on.
     </p>
 
@@ -253,7 +253,7 @@
         <li>
             The return type must be non-generic <code>Task</code> or <code>ValueTask</code>
             (<code>BLEX007</code>). An effect owns the loading and error lifecycle, so there is
-            nowhere to put a return value - write results into <code>[StateAttributeBlex]</code> fields.
+            nowhere to put a return value - write results into <code>[BlexStateAttribute]</code> fields.
         </li>
         <li>
             <code>Latest</code> without a <code>CancellationToken</code> parameter is warning
@@ -343,7 +343,7 @@
     ];
 
     private const string Basic = """
-        [EffectAttributeBlex]
+        [BlexEffectAttribute]
         private async Task OnLoadUser(int id)
         {
             User = await _api.GetUserAsync(id);
@@ -356,7 +356,7 @@
         """;
 
     private const string Cancel = """
-        [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+        [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
         private async Task OnSearch(string query, CancellationToken ct)
         {
             Results = await _api.SearchAsync(query, ct);
@@ -370,29 +370,29 @@
         """;
 
     private const string LabSource = """
-        [EffectAttributeBlex]                                             // mergeMap
+        [BlexEffectAttribute]                                             // mergeMap
         private async Task OnRunParallel(CancellationToken ct) => await Task.Delay(1200, ct);
 
-        [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]     // switchMap
+        [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]     // switchMap
         private async Task OnRunLatest(CancellationToken ct) => await Task.Delay(1200, ct);
 
-        [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Drop)]       // exhaustMap
+        [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Drop)]       // exhaustMap
         private async Task OnRunDrop() => await Task.Delay(1200);
 
-        [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Queue)]      // concatMap
+        [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Queue)]      // concatMap
         private async Task OnRunQueue() => await Task.Delay(1200);
         """;
 
     private const string SearchSource = """
-        [StoreAttributeBlex(Name = "search")]
+        [BlexStoreAttribute(Name = "search")]
         public partial class SearchStore
         {
-            [StateAttributeBlex] private string _query = "";
-            [StateAttributeBlex] private IReadOnlyList<string> _results = [];
+            [BlexStateAttribute] private string _query = "";
+            [BlexStateAttribute] private IReadOnlyList<string> _results = [];
 
-            [ComputedAttributeBlex] private bool ComputeHasResults() => Results.Count > 0;
+            [BlexComputedAttribute] private bool ComputeHasResults() => Results.Count > 0;
 
-            [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+            [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
             private async Task OnSearch(string query, CancellationToken ct)
             {
                 Query = query;
@@ -403,7 +403,7 @@
         """;
 
     private const string Debounce = """
-        [EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+        [BlexEffectAttribute(DebounceMilliseconds = 300, Concurrency = BlexEffectConcurrency.Latest)]
         private async Task OnTypeAhead(string query, CancellationToken ct)
         {
             Query = query;
@@ -412,15 +412,15 @@
         """;
 
     private const string DebouncedSource = """
-        [StoreAttributeBlex(Name = "search")]
+        [BlexStoreAttribute(Name = "search")]
         public partial class SearchStore
         {
-            [StateAttributeBlex] private int _keystrokes;
-            [StateAttributeBlex] private int _requestsStarted;
+            [BlexStateAttribute] private int _keystrokes;
+            [BlexStateAttribute] private int _requestsStarted;
 
-            [ActionAttributeBlex] private void OnCountKeystroke() => Keystrokes++;
+            [BlexActionAttribute] private void OnCountKeystroke() => Keystrokes++;
 
-            [EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+            [BlexEffectAttribute(DebounceMilliseconds = 300, Concurrency = BlexEffectConcurrency.Latest)]
             private async Task OnTypeAhead(string query, CancellationToken ct)
             {
                 // Reached only by the invocation that survived the gate.
@@ -464,7 +464,7 @@
                 BeginEffect(ref __SearchPending);
                 SetEffectState(ref __SearchError, null);
                 await DispatchAsync("Search", () => OnSearch(query, ct),
-                                    IsObserved ? [new ActionArgBlex("query", query)] : null);
+                                    IsObserved ? [new BlexActionArg("query", query)] : null);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

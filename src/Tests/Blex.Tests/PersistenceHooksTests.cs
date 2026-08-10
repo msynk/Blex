@@ -10,11 +10,11 @@ namespace Blex.Tests;
 /// <summary>
 /// The hooks that let an app decide <em>what</em> is persisted and <em>when</em> it is applied:
 /// <c>Partialize</c> (zustand's projection), <c>OnRehydrated</c> and <c>SkipHydration</c> plus the
-/// explicit <see cref="StatePersistorBlex.RehydrateAsync"/> that pairs with it.
+/// explicit <see cref="BlexStatePersistor.RehydrateAsync"/> that pairs with it.
 /// </summary>
 public class PersistenceHooksTests
 {
-    private sealed class InMemoryStorage : IStorageBlex
+    private sealed class InMemoryStorage : IBlexStorage
     {
         public Dictionary<string, string> Data { get; } = new();
 
@@ -34,10 +34,10 @@ public class PersistenceHooksTests
         }
     }
 
-    private static (SettingsStore Store, ManagerBlex Manager, InMemoryStorage Storage) Setup()
+    private static (SettingsStore Store, BlexManager Manager, InMemoryStorage Storage) Setup()
     {
         var store = new SettingsStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         return (store, manager, new InMemoryStorage());
     }
@@ -46,7 +46,7 @@ public class PersistenceHooksTests
     public async Task Partialize_WritesOnlyTheProjectedSubset()
     {
         var (store, manager, storage) = Setup();
-        var options = new PersistenceOptionsBlex
+        var options = new BlexPersistenceOptions
         {
             Partialize = (name, state) =>
             {
@@ -56,7 +56,7 @@ public class PersistenceHooksTests
             },
         };
 
-        await using var persistor = new StatePersistorBlex(manager, storage, options);
+        await using var persistor = new BlexStatePersistor(manager, storage, options);
         await persistor.StartAsync();
 
         store.SetTheme("dark");
@@ -71,12 +71,12 @@ public class PersistenceHooksTests
     public async Task Partialize_OmittedKeys_RehydrateToTheirDeclaredDefaults()
     {
         var (store, manager, storage) = Setup();
-        var options = new PersistenceOptionsBlex
+        var options = new BlexPersistenceOptions
         {
             Partialize = (_, state) => { state.Remove("FontSize"); return state; },
         };
 
-        await using (var persistor = new StatePersistorBlex(manager, storage, options))
+        await using (var persistor = new BlexStatePersistor(manager, storage, options))
         {
             await persistor.StartAsync();
             store.FontSize = 99;
@@ -85,9 +85,9 @@ public class PersistenceHooksTests
         }
 
         var fresh = new SettingsStore();
-        var freshManager = new ManagerBlex();
+        var freshManager = new BlexManager();
         freshManager.Register(fresh);
-        await using var restore = new StatePersistorBlex(freshManager, storage, options);
+        await using var restore = new BlexStatePersistor(freshManager, storage, options);
         await restore.StartAsync();
 
         Assert.Equal("dark", fresh.Theme);
@@ -100,9 +100,9 @@ public class PersistenceHooksTests
         var (store, manager, storage) = Setup();
         storage.Data["blex:settings"] = """{"Theme":"sepia","FontSize":20}""";
         var allow = false;
-        var options = new PersistenceOptionsBlex { Partialize = (_, state) => allow ? state : null };
+        var options = new BlexPersistenceOptions { Partialize = (_, state) => allow ? state : null };
 
-        await using var persistor = new StatePersistorBlex(manager, storage, options);
+        await using var persistor = new BlexStatePersistor(manager, storage, options);
         await persistor.StartAsync();
         Assert.Equal("sepia", store.Theme);
 
@@ -123,7 +123,7 @@ public class PersistenceHooksTests
         // but a JsonNode cannot be parented twice, so the version envelope would reject it. The
         // persistor detaches it instead of making the caller remember.
         var (store, manager, storage) = Setup();
-        var options = new PersistenceOptionsBlex
+        var options = new BlexPersistenceOptions
         {
             Version = 3,
             Partialize = (_, state) =>
@@ -133,10 +133,10 @@ public class PersistenceHooksTests
             },
         };
 
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
-        await using var persistor = new StatePersistorBlex(manager, storage, options);
+        await using var persistor = new BlexStatePersistor(manager, storage, options);
         await persistor.StartAsync();
 
         store.SetTheme("dark");
@@ -153,9 +153,9 @@ public class PersistenceHooksTests
     {
         var (store, manager, storage) = Setup();
         var seen = new List<(string Store, JsonObject? State)>();
-        var options = new PersistenceOptionsBlex { OnRehydrated = (name, state) => seen.Add((name, state)) };
+        var options = new BlexPersistenceOptions { OnRehydrated = (name, state) => seen.Add((name, state)) };
 
-        await using (var first = new StatePersistorBlex(manager, storage, options))
+        await using (var first = new BlexStatePersistor(manager, storage, options))
         {
             await first.StartAsync();
             Assert.Equal([("settings", (JsonObject?)null)], seen); // nothing stored yet
@@ -166,9 +166,9 @@ public class PersistenceHooksTests
 
         seen.Clear();
         var fresh = new SettingsStore();
-        var freshManager = new ManagerBlex();
+        var freshManager = new BlexManager();
         freshManager.Register(fresh);
-        await using var second = new StatePersistorBlex(freshManager, storage, options);
+        await using var second = new BlexStatePersistor(freshManager, storage, options);
         await second.StartAsync();
 
         var (name, applied) = Assert.Single(seen);
@@ -181,14 +181,14 @@ public class PersistenceHooksTests
     {
         var (_, manager, storage) = Setup();
         storage.Data["blex:settings"] = """{"Theme":"dark","FontSize":16}""";
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
-        var options = new PersistenceOptionsBlex
+        var options = new BlexPersistenceOptions
         {
             OnRehydrated = (_, _) => throw new InvalidOperationException("callback boom"),
         };
 
-        await using var persistor = new StatePersistorBlex(manager, storage, options);
+        await using var persistor = new BlexStatePersistor(manager, storage, options);
         await persistor.StartAsync(); // must not throw
 
         Assert.Contains(errors, e => e.Source == "persistence" && e.Exception is InvalidOperationException);
@@ -199,9 +199,9 @@ public class PersistenceHooksTests
     {
         var (store, manager, storage) = Setup();
         storage.Data["blex:settings"] = """{"Theme":"dark","FontSize":16}""";
-        var options = new PersistenceOptionsBlex { SkipHydration = true };
+        var options = new BlexPersistenceOptions { SkipHydration = true };
 
-        await using var persistor = new StatePersistorBlex(manager, storage, options);
+        await using var persistor = new BlexStatePersistor(manager, storage, options);
         await persistor.StartAsync();
 
         Assert.Equal("light", store.Theme); // stored state deliberately not applied yet
@@ -223,7 +223,7 @@ public class PersistenceHooksTests
         var (store, manager, storage) = Setup();
         storage.Data["blex:settings"] = """{"Theme":"dark"}""";
 
-        await using var persistor = new StatePersistorBlex(manager, storage);
+        await using var persistor = new BlexStatePersistor(manager, storage);
         await persistor.StartAsync();
         await persistor.RehydrateAsync();
         await persistor.FlushAsync();

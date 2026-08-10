@@ -7,27 +7,27 @@ namespace Blex.Tests;
 
 public class MiddlewareHookTests
 {
-    private sealed class RecordingMiddleware : IMiddlewareBlex
+    private sealed class RecordingMiddleware : IBlexMiddleware
     {
         public List<string> Before { get; } = new();
         public List<string> After { get; } = new();
-        public System.Func<PreActionContextBlex, bool>? Veto { get; set; }
+        public System.Func<BlexPreActionContext, bool>? Veto { get; set; }
 
-        public void BeforeAction(PreActionContextBlex context)
+        public void BeforeAction(BlexPreActionContext context)
         {
             Before.Add(context.ActionName);
             if (Veto is not null && !Veto(context))
                 context.Cancel();
         }
 
-        public void OnAction(ActionContextBlex context) => After.Add(context.ActionName);
+        public void OnAction(BlexActionContext context) => After.Add(context.ActionName);
     }
 
     [Fact]
     public void BeforeAction_FiresBeforeApply_ForDispatch()
     {
         var mw = new RecordingMiddleware();
-        var manager = new ManagerBlex(new[] { mw });
+        var manager = new BlexManager(new[] { mw });
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -41,7 +41,7 @@ public class MiddlewareHookTests
     public void BeforeAction_Cancel_VetoesMutation_AndRecord()
     {
         var mw = new RecordingMiddleware { Veto = _ => false }; // veto everything
-        var manager = new ManagerBlex(new[] { mw });
+        var manager = new BlexManager(new[] { mw });
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -56,7 +56,7 @@ public class MiddlewareHookTests
     public void BeforeAction_Cancel_VetoesStandaloneSet()
     {
         var mw = new RecordingMiddleware { Veto = c => c.ActionName != "Set Count" };
-        var manager = new ManagerBlex(new[] { mw });
+        var manager = new BlexManager(new[] { mw });
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -69,7 +69,7 @@ public class MiddlewareHookTests
     public async Task BeforeAction_Cancel_VetoesAsyncAction()
     {
         var mw = new RecordingMiddleware { Veto = _ => false };
-        var manager = new ManagerBlex(new[] { mw });
+        var manager = new BlexManager(new[] { mw });
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -82,7 +82,7 @@ public class MiddlewareHookTests
     [Fact]
     public void FilterMiddleware_VetoesByPredicate()
     {
-        var manager = new ManagerBlex(new[] { new FilterMiddlewareBlex(c => c.ActionName != "Increment") });
+        var manager = new BlexManager(new[] { new BlexFilterMiddleware(c => c.ActionName != "Increment") });
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -95,7 +95,7 @@ public class MiddlewareHookTests
     [Fact]
     public void Veto_DoesNotNotifySubscribers()
     {
-        var manager = new ManagerBlex(new[] { new FilterMiddlewareBlex(_ => false) });
+        var manager = new BlexManager(new[] { new BlexFilterMiddleware(_ => false) });
         var counter = new CounterStore();
         manager.Register(counter);
         var raised = 0;

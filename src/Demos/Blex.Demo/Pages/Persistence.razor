@@ -1,7 +1,7 @@
 @page "/persistence"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject SettingsStore Settings
-@inject StatePersistorBlex Persistor
+@inject BlexStatePersistor Persistor
 @inject IJSRuntime Js
 
 <DocPage Href="persistence" Title="Persistence"
@@ -82,7 +82,7 @@
     </Callout>
 
     <h2>Options</h2>
-    <ApiTable Title="PersistenceOptionsBlex" Rows="@OptionRows" />
+    <ApiTable Title="BlexPersistenceOptions" Rows="@OptionRows" />
 
     <h3>Debouncing</h3>
     <p>
@@ -179,13 +179,13 @@
         </p>
     </Callout>
 
-    <h2>StatePersistorBlex</h2>
+    <h2>BlexStatePersistor</h2>
     <p>Resolve it from DI when you need to control persistence directly.</p>
     <ApiTable Rows="@PersistorRows" />
 
     <Callout Kind="Callout.CalloutKind.Note" Title="Only registered stores rehydrate">
         <p style="margin-bottom:0">
-            <code>StartAsync</code> walks the manager's registry. <code>&lt;ProviderBlex&gt;</code>
+            <code>StartAsync</code> walks the manager's registry. <code>&lt;BlexProvider&gt;</code>
             registers everything before calling it, so in Blazor this is automatic. In a host without
             the provider, resolve every store from DI first - resolution is what registers them.
         </p>
@@ -200,7 +200,7 @@
 
     <p>
         A storage that can tell when something <em>else</em> wrote to it - a file watcher, a server
-        push, another tab - can also implement <code>IExternalStorageChangeBlex</code> to opt into
+        push, another tab - can also implement <code>IBlexExternalStorageChange</code> to opt into
         <code>SyncAcrossTabs</code>. Raise the event only for changes you did not make yourself;
         echoing your own writes back would spin the two sides against each other.
     </p>
@@ -208,7 +208,7 @@
 
     <h2>Prerendering</h2>
     <p>
-        <code>&lt;ProviderBlex&gt;</code> also bridges to Blazor's
+        <code>&lt;BlexProvider&gt;</code> also bridges to Blazor's
         <code>PersistentComponentState</code>. State produced during prerendering is handed to the
         interactive render instead of being recomputed, which removes the "double render" flicker.
         That is separate from durable persistence: it applies to <em>every</em> store, not just
@@ -271,7 +271,7 @@
     [
         new("AddBlexLocalStoragePersistence(…)", "Blazor: <code>window.localStorage</code>. Survives browser restarts."),
         new("AddBlexSessionStoragePersistence(…)", "Blazor: <code>window.sessionStorage</code>. Cleared when the tab closes."),
-        new("AddBlexPersistence(…)", "Core: wires the persistor to whatever <code>IStorageBlex</code> you have registered."),
+        new("AddBlexPersistence(…)", "Core: wires the persistor to whatever <code>IBlexStorage</code> you have registered."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> OptionRows =
@@ -284,7 +284,7 @@
         new("Func&lt;string, JsonObject, JsonObject?&gt;? Partialize", "Projects each store's snapshot before it is written. Receives the store name and its state; return what to persist, or <code>null</code> to skip that store's write and leave storage as-is."),
         new("Action&lt;string, JsonObject?&gt;? OnRehydrated", "Called once per persistent store as its stored slice is applied. Receives the store name and the applied state, or <code>null</code> when nothing was stored."),
         new("bool SkipHydration", "Start saving without restoring. Call <code>RehydrateAsync()</code> to apply stored state later. Default <code>false</code>."),
-        new("bool SyncAcrossTabs", "Apply state written by another tab as soon as it lands, instead of only at the next startup. Requires a storage implementing <code>IExternalStorageChangeBlex</code> (the browser <code>localStorage</code> provider does). Default <code>false</code>."),
+        new("bool SyncAcrossTabs", "Apply state written by another tab as soon as it lands, instead of only at the next startup. Requires a storage implementing <code>IBlexExternalStorageChange</code> (the browser <code>localStorage</code> provider does). Default <code>false</code>."),
         new("Action&lt;string, JsonObject&gt;? OnExternalChange", "Called after another tab's state has been applied, with the store name and the applied slice."),
     ];
 
@@ -298,11 +298,11 @@
     ];
 
     private const string OptIn = """
-        [StoreAttributeBlex(Name = "settings", Persist = true)]
+        [BlexStoreAttribute(Name = "settings", Persist = true)]
         public partial class SettingsStore
         {
-            [StateAttributeBlex] private string _accent = "violet";
-            [StateAttributeBlex] private Density _density = Density.Comfortable;
+            [BlexStateAttribute] private string _accent = "violet";
+            [BlexStateAttribute] private Density _density = Density.Comfortable;
         }
         """;
 
@@ -321,21 +321,21 @@
         """;
 
     private const string StoreSource = """
-        [StoreAttributeBlex(Name = "settings", Persist = true)]
+        [BlexStoreAttribute(Name = "settings", Persist = true)]
         public partial class SettingsStore
         {
-            [StateAttributeBlex] private string _accent = "violet";
-            [StateAttributeBlex] private Density _density = Density.Comfortable;
-            [StateAttributeBlex] private bool _showLineNumbers = true;
-            [StateAttributeBlex] private string _token = "sk-live-...";   // redacted from DevTools
+            [BlexStateAttribute] private string _accent = "violet";
+            [BlexStateAttribute] private Density _density = Density.Comfortable;
+            [BlexStateAttribute] private bool _showLineNumbers = true;
+            [BlexStateAttribute] private string _token = "sk-live-...";   // redacted from DevTools
 
-            [ComputedAttributeBlex]
+            [BlexComputedAttribute]
             private string ComputeSummary()
                 => $"{Accent} / {Density} / {(ShowLineNumbers ? "numbered" : "plain")}";
 
-            [ActionAttributeBlex] private void OnSetAccent(string accent)  => Accent = accent;
-            [ActionAttributeBlex] private void OnSetDensity(Density d)     => Density = d;
-            [ActionAttributeBlex] private void OnToggleLineNumbers()       => ShowLineNumbers = !ShowLineNumbers;
+            [BlexActionAttribute] private void OnSetAccent(string accent)  => Accent = accent;
+            [BlexActionAttribute] private void OnSetDensity(Density d)     => Density = d;
+            [BlexActionAttribute] private void OnToggleLineNumbers()       => ShowLineNumbers = !ShowLineNumbers;
         }
         """;
 
@@ -419,7 +419,7 @@
         builder.Services.AddBlexLocalStoragePersistence(options => options.SkipHydration = true);
 
         // ...later, once you know who the user is:
-        @inject StatePersistorBlex Persistor
+        @inject BlexStatePersistor Persistor
 
         private async Task OnSignedIn()
         {
@@ -428,7 +428,7 @@
         """;
 
     private const string CustomStorage = """
-        public sealed class FileStorage(string directory) : IStorageBlex
+        public sealed class FileStorage(string directory) : IBlexStorage
         {
             private string Path(string key) => System.IO.Path.Combine(directory, key + ".json");
 
@@ -446,12 +446,12 @@
         }
 
         // Program.cs
-        services.AddSingleton<IStorageBlex>(new FileStorage("./state"));
+        services.AddSingleton<IBlexStorage>(new FileStorage("./state"));
         services.AddBlexPersistence();
         """;
 
     private const string WatchableStorage = """
-        public sealed class FileStorage : IStorageBlex, IExternalStorageChangeBlex
+        public sealed class FileStorage : IBlexStorage, IBlexExternalStorageChange
         {
             private FileSystemWatcher? _watcher;
 

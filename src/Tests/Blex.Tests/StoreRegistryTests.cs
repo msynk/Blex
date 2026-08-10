@@ -14,7 +14,7 @@ public class StoreRegistryTests
     [Fact]
     public void RegisteringFromInsideANotification_DoesNotInvalidateTheEnumeration()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 
@@ -38,7 +38,7 @@ public class StoreRegistryTests
     [Fact]
     public void SnapshotTakenBeforeRegistration_IsUnaffectedByIt()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(new CounterStore());
 
         var snapshot = manager.Stores;
@@ -51,7 +51,7 @@ public class StoreRegistryTests
     [Fact]
     public void SnapshotTakenBeforeUnregistration_IsUnaffectedByIt()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         var settings = new SettingsStore();
         manager.Register(counter);
@@ -67,7 +67,7 @@ public class StoreRegistryTests
     [Fact]
     public void Unregister_PreservesTheOrderOfTheRemainingStores()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var a = new CounterStore();
         var b = new SettingsStore();
         var c = new ProfileStore();
@@ -83,7 +83,7 @@ public class StoreRegistryTests
     [Fact]
     public void UnregisteringAnUnknownStore_IsANoOp()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(new CounterStore());
 
         manager.Unregister(new SettingsStore());
@@ -94,7 +94,7 @@ public class StoreRegistryTests
     [Fact]
     public void GetStoreByName_MatchesTheGlobalStateKeys()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
         manager.Register(new SettingsStore());
@@ -107,7 +107,7 @@ public class StoreRegistryTests
     [Fact]
     public void GetStoreByName_ForgetsAnUnregisteredStore()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
         manager.Unregister(counter);
@@ -118,7 +118,7 @@ public class StoreRegistryTests
     [Fact]
     public void UnregisteredStore_StopsBeingObserved_ButKeepsWorking()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
         var seen = new List<string>();

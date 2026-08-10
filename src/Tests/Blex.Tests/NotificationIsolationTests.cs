@@ -7,7 +7,7 @@ using Xunit;
 namespace Blex.Tests;
 
 /// <summary>
-/// A throwing <see cref="IStoreBlex.StateChanged"/> / <see cref="INotifyPropertyChanged.PropertyChanged"/>
+/// A throwing <see cref="IBlexStore.StateChanged"/> / <see cref="INotifyPropertyChanged.PropertyChanged"/>
 /// subscriber must not starve the other subscribers, nor the dispatch pipeline behind them.
 /// </summary>
 public class NotificationIsolationTests
@@ -15,8 +15,8 @@ public class NotificationIsolationTests
     [Fact]
     public void ThrowingSubscriber_DoesNotStarveOtherSubscribers()
     {
-        var manager = new ManagerBlex();
-        var errors = new List<ErrorBlex>();
+        var manager = new BlexManager();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         var store = new CounterStore();
@@ -39,7 +39,7 @@ public class NotificationIsolationTests
     [Fact]
     public void ThrowingSubscriber_DoesNotBreakDispatchObservers()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.OnError = _ => { };
 
         var store = new CounterStore();
@@ -58,8 +58,8 @@ public class NotificationIsolationTests
     [Fact]
     public void ThrowingPropertyChangedSubscriber_IsIsolated()
     {
-        var manager = new ManagerBlex();
-        var errors = new List<ErrorBlex>();
+        var manager = new BlexManager();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         var store = new CounterStore();
@@ -93,8 +93,8 @@ public class NotificationIsolationTests
     [Fact]
     public void ThrowingSelectorSubscription_IsIsolated()
     {
-        var manager = new ManagerBlex();
-        var errors = new List<ErrorBlex>();
+        var manager = new BlexManager();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         var store = new CounterStore();

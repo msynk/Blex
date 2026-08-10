@@ -6,7 +6,7 @@ namespace Blex.Tests;
 
 /// <summary>
 /// Equality-gated subscriptions: the store-level extension and its cross-store counterpart on
-/// <see cref="ManagerBlex"/>. Both exist so a consumer pays for changes it actually cares about
+/// <see cref="BlexManager"/>. Both exist so a consumer pays for changes it actually cares about
 /// rather than for every action in the application.
 /// </summary>
 public class SelectorSubscriptionTests
@@ -67,7 +67,7 @@ public class SelectorSubscriptionTests
     {
         var counter = new CounterStore();
         var profile = new ProfileStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         manager.Register(profile);
 
@@ -87,7 +87,7 @@ public class SelectorSubscriptionTests
     public void ManagerSelector_ReportsPreviousAndCurrent()
     {
         var counter = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
 
         var transitions = new List<(int Previous, int Current)>();
@@ -103,7 +103,7 @@ public class SelectorSubscriptionTests
     public void ManagerSelector_FireImmediately_UsesTheValueAtSubscriptionTime()
     {
         var counter = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         counter.Add(3);
 
@@ -120,7 +120,7 @@ public class SelectorSubscriptionTests
     public void ManagerSelector_FireImmediately_ThatThrows_DoesNotLeaveTheHandlerAttached()
     {
         var counter = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         var calls = 0;
 
@@ -141,7 +141,7 @@ public class SelectorSubscriptionTests
     public void ManagerSelector_UsesTheSuppliedComparer()
     {
         var counter = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
 
         var seen = new List<int>();
@@ -162,9 +162,9 @@ public class SelectorSubscriptionTests
     public void ManagerSelector_ThrowingCallback_IsIsolatedAndReported()
     {
         var counter = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         using var bad = manager.Subscribe<int>(() => counter.Count, _ => throw new InvalidOperationException("boom"));
@@ -181,7 +181,7 @@ public class SelectorSubscriptionTests
     public void ManagerSelector_Dispose_StopsObserving()
     {
         var counter = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
 
         var seen = new List<int>();

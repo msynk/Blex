@@ -12,7 +12,7 @@ namespace Blex.Tests;
 /// </summary>
 public class StoreInpcTests
 {
-    private static List<string?> Track(StoreBaseBlex store)
+    private static List<string?> Track(BlexStoreBase store)
     {
         var raised = new List<string?>();
         ((INotifyPropertyChanged)store).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
@@ -88,8 +88,8 @@ public class StoreInpcTests
     [Fact]
     public void PropertyChanged_StillRaised_WhenStateChangedSubscriberThrows()
     {
-        var manager = new ManagerBlex();
-        var errors = new List<ErrorBlex>();
+        var manager = new BlexManager();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         var store = new CounterStore();

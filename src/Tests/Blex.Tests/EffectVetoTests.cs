@@ -12,9 +12,9 @@ namespace Blex.Tests;
 /// </summary>
 public class EffectVetoTests
 {
-    private static (EffectConcurrencyStore Store, ManagerBlex Manager) Setup(Func<PreActionContextBlex, bool> filter)
+    private static (EffectConcurrencyStore Store, BlexManager Manager) Setup(Func<BlexPreActionContext, bool> filter)
     {
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(filter)]);
+        var manager = new BlexManager([new BlexFilterMiddleware(filter)]);
         var store = new EffectConcurrencyStore();
         manager.Register(store);
         return (store, manager);
@@ -139,7 +139,7 @@ public class EffectVetoTests
     public async Task DroppedEffect_NeverReachesTheFilter()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx => { seen.Add(ctx.ActionName); return true; })]);
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx => { seen.Add(ctx.ActionName); return true; })]);
         var store = new EffectConcurrencyStore();
         manager.Register(store);
 
@@ -157,8 +157,8 @@ public class EffectVetoTests
     [Fact]
     public async Task EffectArguments_ReachTheFilterBeforeTheBodyRuns()
     {
-        List<ActionArgBlex>? captured = null;
-        var manager = new ManagerBlex([new FilterMiddlewareBlex(ctx =>
+        List<BlexActionArg>? captured = null;
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx =>
         {
             captured = [.. ctx.Args];
             return false;

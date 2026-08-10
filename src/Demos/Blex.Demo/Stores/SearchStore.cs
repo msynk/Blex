@@ -5,7 +5,7 @@ namespace Blex.Demo.Stores;
 /// in-flight request, and the trailing <see cref="CancellationToken"/> makes the generator emit
 /// <c>CancelSearch()</c>. The <c>SearchIsLoading</c> / <c>SearchError</c> properties come for free.
 /// </summary>
-[StoreAttributeBlex(Name = "search")]
+[BlexStoreAttribute(Name = "search")]
 public partial class SearchStore
 {
     private static readonly string[] Catalog =
@@ -16,15 +16,15 @@ public partial class SearchStore
         "State Management", "Dependency Injection", "Middleware Pipeline",
     ];
 
-    [StateAttributeBlex] private string _query = "";
-    [StateAttributeBlex] private IReadOnlyList<string> _results = [];
-    [StateAttributeBlex] private bool _simulateFailure;
+    [BlexStateAttribute] private string _query = "";
+    [BlexStateAttribute] private IReadOnlyList<string> _results = [];
+    [BlexStateAttribute] private bool _simulateFailure;
 
-    [ComputedAttributeBlex] private bool ComputeHasResults() => Results.Count > 0;
+    [BlexComputedAttribute] private bool ComputeHasResults() => Results.Count > 0;
 
-    [ActionAttributeBlex] private void OnSetSimulateFailure(bool value) => SimulateFailure = value;
+    [BlexActionAttribute] private void OnSetSimulateFailure(bool value) => SimulateFailure = value;
 
-    [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+    [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
     private async Task OnSearch(string query, CancellationToken ct)
     {
         Query = query;
@@ -40,7 +40,7 @@ public partial class SearchStore
             : [.. Catalog.Where(c => c.Contains(query, StringComparison.OrdinalIgnoreCase))];
     }
 
-    [ActionAttributeBlex]
+    [BlexActionAttribute]
     private void OnClear()
     {
         Query = "";
@@ -53,12 +53,12 @@ public partial class SearchStore
     // Same search, gated behind a quiet period. Latest still matters: once a request does get
     // through, a later one that also gets through supersedes it.
 
-    [StateAttributeBlex] private int _keystrokes;
-    [StateAttributeBlex] private int _requestsStarted;
+    [BlexStateAttribute] private int _keystrokes;
+    [BlexStateAttribute] private int _requestsStarted;
 
-    [ActionAttributeBlex] private void OnCountKeystroke() => Keystrokes++;
+    [BlexActionAttribute] private void OnCountKeystroke() => Keystrokes++;
 
-    [EffectAttributeBlex(DebounceMilliseconds = 300, Concurrency = EffectConcurrencyBlex.Latest)]
+    [BlexEffectAttribute(DebounceMilliseconds = 300, Concurrency = BlexEffectConcurrency.Latest)]
     private async Task OnTypeAhead(string query, CancellationToken ct)
     {
         // Reached only by the invocation that survived the 300 ms gate, so this counter is the

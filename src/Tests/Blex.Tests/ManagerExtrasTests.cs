@@ -10,9 +10,9 @@ public class ManagerExtrasTests
     public void OnError_ReceivesSubscriberFailures()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         using var sub = manager.Subscribe(_ => throw new InvalidOperationException("boom"));
@@ -28,9 +28,9 @@ public class ManagerExtrasTests
     [Fact]
     public void OnError_ReceivesMiddlewareFailures()
     {
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         var store = new CounterStore();
-        var manager = new ManagerBlex([new DelegateMiddlewareBlex(_ => throw new InvalidOperationException("mw"))])
+        var manager = new BlexManager([new BlexDelegateMiddleware(_ => throw new InvalidOperationException("mw"))])
         {
             OnError = errors.Add,
         };
@@ -47,7 +47,7 @@ public class ManagerExtrasTests
     public void ThrowingOnErrorHandler_DoesNotBreakDispatch()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         manager.OnError = _ => throw new InvalidOperationException("handler is broken too");
 
@@ -61,7 +61,7 @@ public class ManagerExtrasTests
     public void StateRestored_IsRaisedAfterRestoreGlobalState()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
 
         var before = manager.CaptureGlobalState();
@@ -80,10 +80,10 @@ public class ManagerExtrasTests
     {
         var counter = new CounterStore();
         var settings = new SettingsStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         manager.Register(settings);
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
         counter.Increment();
@@ -106,7 +106,7 @@ public class ManagerExtrasTests
     public void Unregister_RemovesStoreFromPipeline()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
 
         manager.Unregister(store);
@@ -119,7 +119,7 @@ public class ManagerExtrasTests
     public void Unregister_DetachesStore_ActionsNoLongerObserved()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         var seen = new List<string>();
         using var sub = manager.Subscribe(ctx => seen.Add(ctx.ActionName));
@@ -138,7 +138,7 @@ public class ManagerExtrasTests
     {
         var counter = new CounterStore();
         var settings = new SettingsStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(counter);
         manager.Register(settings);
 
@@ -168,9 +168,9 @@ public class ManagerExtrasTests
     public void History_RefreshesPresent_AfterExternalRestore()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
-        using var history = new HistoryBlex(manager);
+        using var history = new BlexHistory(manager);
         history.Start();
 
         store.Increment();                       // 1
@@ -191,7 +191,7 @@ public class ManagerExtrasTests
     public void ThrowingSubscriber_DuringStandaloneSet_DoesNotLeakDirtyFlag()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         var log = new List<string>();
         using var sub = manager.Subscribe(ctx => log.Add(ctx.ActionName));
@@ -221,7 +221,7 @@ public class ManagerExtrasTests
     public void RestoreFromInsideReactor_DoesNotCorruptInFlightSnapshots()
     {
         var store = new CounterStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         var baseline = manager.CaptureGlobalState(); // Count = 0
 
@@ -244,7 +244,7 @@ public class ManagerExtrasTests
     [Fact]
     public void MalformedDevToolsMessage_DoesNotThrow()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(new CounterStore());
 
         manager.HandleDevToolsMessage("""{"type":"DISPATCH","payload":{"type":"JUMP_TO_STATE"},"state":"{corrupt"}""");

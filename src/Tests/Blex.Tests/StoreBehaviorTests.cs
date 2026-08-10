@@ -109,7 +109,7 @@ public class StoreBehaviorTests
     public void StandaloneSetter_RecordsActionOnManager()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex(new[] { new DelegateMiddlewareBlex(c => seen.Add(c.ActionName)) });
+        var manager = new BlexManager(new[] { new BlexDelegateMiddleware(c => seen.Add(c.ActionName)) });
         var store = new CounterStore();
         manager.Register(store);
 
@@ -122,7 +122,7 @@ public class StoreBehaviorTests
     public async Task AsyncAction_RecordsExactlyOneAction()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex(new[] { new DelegateMiddlewareBlex(c => seen.Add(c.ActionName)) });
+        var manager = new BlexManager(new[] { new BlexDelegateMiddleware(c => seen.Add(c.ActionName)) });
         var store = new CounterStore();
         manager.Register(store);
 
@@ -145,7 +145,7 @@ public class StoreBehaviorTests
     public async Task Action_ExplicitLabelWithSpaces_KeepsValidWrapperName_AndLabel()
     {
         var seen = new List<string>();
-        var manager = new ManagerBlex(new[] { new DelegateMiddlewareBlex(c => seen.Add(c.ActionName)) });
+        var manager = new BlexManager(new[] { new BlexDelegateMiddleware(c => seen.Add(c.ActionName)) });
         var store = new CounterStore();
         manager.Register(store);
 

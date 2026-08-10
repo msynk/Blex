@@ -1,6 +1,6 @@
 @page "/history"
-@inherits ComponentBaseBlex
-@inject HistoryBlex HistoryStack
+@inherits BlexComponentBase
+@inject BlexHistory HistoryStack
 @inject CounterStore Counter
 @inject ContactsStore Contacts
 
@@ -9,7 +9,7 @@
 
     <h2>Setup</h2>
     <p>
-        Register it once. <code>&lt;ProviderBlex&gt;</code> calls <code>Start()</code> for you -
+        Register it once. <code>&lt;BlexProvider&gt;</code> calls <code>Start()</code> for you -
         deliberately <em>after</em> rehydration, so the baseline that undo ultimately returns to is
         the state the user actually loaded, not the pre-hydration defaults.
     </p>
@@ -27,7 +27,7 @@
             <button class="btn btn-primary" @onclick="HistoryStack.Redo" disabled="@(!HistoryStack.CanRedo)">
                 ↷ Redo @HistoryStack.NextRedoLabel
             </button>
-            <button class="btn" title="HistoryBlex.Checkpoint(...)" @onclick="Checkpoint">Checkpoint</button>
+            <button class="btn" title="BlexHistory.Checkpoint(...)" @onclick="Checkpoint">Checkpoint</button>
             <button class="btn btn-ghost" @onclick="HistoryStack.Clear">Clear history</button>
         </div>
         <p class="small muted" style="margin-top:0.4rem;margin-bottom:0">@_checkpointNote</p>
@@ -71,7 +71,7 @@
     </DemoCard>
 
     <h2>API</h2>
-    <ApiTable Title="HistoryBlex" Rows="@HistoryRows" />
+    <ApiTable Title="BlexHistory" Rows="@HistoryRows" />
 
     <h2>How it works</h2>
     <ol>
@@ -153,7 +153,7 @@
 
     <h2>Scoping history to one store</h2>
     <p>
-        <code>HistoryBlex</code> is deliberately global: it snapshots the whole tree, which is what
+        <code>BlexHistory</code> is deliberately global: it snapshots the whole tree, which is what
         makes cross-store undo coherent. For per-store history, keep your own stack of that store's
         snapshots and restore them with <code>RestoreState</code>, which applies a snapshot without
         recording an action.
@@ -198,7 +198,7 @@
 
     private static readonly IReadOnlyList<ApiTable.Row> HistoryRows =
     [
-        new("void Start()", "Captures the baseline and begins recording. Idempotent. Called by <code>&lt;ProviderBlex&gt;</code> after rehydration."),
+        new("void Start()", "Captures the baseline and begins recording. Idempotent. Called by <code>&lt;BlexProvider&gt;</code> after rehydration."),
         new("void Undo()", "Restores the previous state. No-op when <code>CanUndo</code> is false."),
         new("void Redo()", "Re-applies the most recently undone state. No-op when <code>CanRedo</code> is false."),
         new("void Checkpoint(string? label = null)", "Commits the current state as an undo step, labelled <code>label</code> (default <code>\"Checkpoint\"</code>). Pairs with a filter: the filter keeps noise out, this marks the boundaries. A checkpoint on unchanged state adds nothing."),
@@ -218,14 +218,14 @@
         """;
 
     private const string Usage = """
-        @inject HistoryBlex History
+        @inject BlexHistory History
 
         <button @onclick="History.Undo" disabled="@(!History.CanUndo)">Undo</button>
         <button @onclick="History.Redo" disabled="@(!History.CanRedo)">Redo</button>
         """;
 
     private const string DemoSource = """
-        @inject HistoryBlex History
+        @inject BlexHistory History
 
         <button @onclick="History.Undo" disabled="@(!History.CanUndo)">
             Undo @History.NextUndoLabel
@@ -278,12 +278,12 @@
         builder.Services.AddBlexHistory(filter: ctx => !ctx.ActionName.StartsWith("Set "));
 
         // ...so the component marks the boundaries instead.
-        @inject HistoryBlex History
+        @inject BlexHistory History
 
         private void OnBlur() => History.Checkpoint("Edit title");
 
         // Or on a pause in typing, via a debounced effect:
-        [EffectAttributeBlex(DebounceMilliseconds = 500)]
+        [BlexEffectAttribute(DebounceMilliseconds = 500)]
         private async Task OnSettled()
         {
             await Task.CompletedTask;

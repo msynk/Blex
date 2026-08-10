@@ -1,6 +1,6 @@
 @page "/errors"
-@inherits ComponentBaseBlex
-@inject ManagerBlex Manager
+@inherits BlexComponentBase
+@inject BlexManager Manager
 @inject CounterStore Counter
 @inject ErrorLog Log
 
@@ -24,7 +24,7 @@
         any real app.
     </p>
 
-    <h2>ErrorBlex</h2>
+    <h2>BlexError</h2>
     <CodeBlock Code="@Record" />
     <ApiTable Rows="@ErrorRows" />
 
@@ -39,8 +39,8 @@
                 <tr><td><code>persistence</code></td><td>Rehydrating, applying, serializing, scheduling or writing a persisted slice failed. <code>Detail</code> names the store or key.</td></tr>
                 <tr><td><code>restore</code></td><td>A store's slice could not be deserialized during <code>RestoreGlobalState</code>. That store is skipped; the others still restore.</td></tr>
                 <tr><td><code>devtools</code></td><td>A time-travel snapshot from the extension was malformed, a sanitizer threw, or the JS bridge failed to load or send.</td></tr>
-                <tr><td><code>history</code></td><td>A <code>HistoryBlex.Changed</code> handler threw while recording or after an external restore, or a history filter threw.</td></tr>
-                <tr><td><code>reset</code></td><td>A store failed to reset during <code>ManagerBlex.ResetAll()</code>. That store is skipped; the rest still reset.</td></tr>
+                <tr><td><code>history</code></td><td>A <code>BlexHistory.Changed</code> handler threw while recording or after an external restore, or a history filter threw.</td></tr>
+                <tr><td><code>reset</code></td><td>A store failed to reset during <code>BlexManager.ResetAll()</code>. That store is skipped; the rest still reset.</td></tr>
                 <tr><td><code>register</code></td><td>Two stores were registered under the same name, so their state slices, DevTools entries and storage keys collide.</td></tr>
                 <tr><td><code>prerender</code></td><td>Handing a store's state across the prerender-to-interactive boundary failed. The store simply renders from its own state instead - the worst case is rendering twice.</td></tr>
             </tbody>
@@ -116,8 +116,8 @@
 
     <Callout Kind="Callout.CalloutKind.Gotcha" Title="OnError is captured on the singleton options">
         <p style="margin-bottom:0">
-            <code>OptionsBlex</code> is registered as a singleton, and the delegate you assign is
-            copied onto each scoped <code>ManagerBlex</code> as it is created. Do not close over a
+            <code>BlexOptions</code> is registered as a singleton, and the delegate you assign is
+            copied onto each scoped <code>BlexManager</code> as it is created. Do not close over a
             scoped service in it - under Blazor Server that would capture one circuit's dependency
             and share it with all of them. Close over something process-wide (an
             <code>ILoggerFactory</code>, a metrics client), or assign
@@ -127,7 +127,7 @@
 
     <h2>Setting it per scope</h2>
     <p>
-        <code>OnError</code> is also a settable property on <code>ManagerBlex</code>, so a scoped
+        <code>OnError</code> is also a settable property on <code>BlexManager</code>, so a scoped
         component or service can install its own handler where a scoped dependency is genuinely
         needed.
     </p>
@@ -136,8 +136,8 @@
     <Callout Kind="Callout.CalloutKind.Warning" Title="Errors inside an action body are not isolated">
         <p style="margin-bottom:0">
             This is about the <em>observers</em> of an action. An exception thrown by your own
-            <code>[ActionAttributeBlex]</code> method body propagates to the caller as usual - only
-            <code>[EffectAttributeBlex]</code> bodies capture their exception, into the generated
+            <code>[BlexActionAttribute]</code> method body propagates to the caller as usual - only
+            <code>[BlexEffectAttribute]</code> bodies capture their exception, into the generated
             <code>XxxError</code> property.
         </p>
     </Callout>
@@ -188,7 +188,7 @@
         """;
 
     private const string Record = """
-        public readonly record struct ErrorBlex(
+        public readonly record struct BlexError(
             string Source,
             Exception Exception,
             string? Detail = null);
@@ -204,7 +204,7 @@
 
         Counter.Increment();
         // -> the action applies, other observers still run,
-        //    and options.OnError receives ErrorBlex("subscriber", ex, "counter/Increment").
+        //    and options.OnError receives BlexError("subscriber", ex, "counter/Increment").
         """;
 
     private const string Logging = """
@@ -225,7 +225,7 @@
         """;
 
     private const string PerScope = """
-        [Inject] private ManagerBlex Manager { get; set; } = default!;
+        [Inject] private BlexManager Manager { get; set; } = default!;
         [Inject] private IToastService Toasts { get; set; } = default!;   // scoped
 
         protected override void OnInitialized()

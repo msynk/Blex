@@ -15,12 +15,12 @@ namespace Blex.Tests;
 /// </summary>
 public class EntityAdapterSetTests
 {
-    private static readonly EntityAdapterBlex<Todo, int> Adapter = new(t => t.Id);
+    private static readonly BlexEntityAdapter<Todo, int> Adapter = new(t => t.Id);
 
-    private static readonly EntityAdapterBlex<Todo, int> SortedAdapter =
+    private static readonly BlexEntityAdapter<Todo, int> SortedAdapter =
         new(t => t.Id, Comparer<Todo>.Create((a, b) => string.CompareOrdinal(a.Text, b.Text)));
 
-    private static EntityStateBlex<Todo, int> Seeded()
+    private static BlexEntityState<Todo, int> Seeded()
         => Adapter.SetAll(Adapter.GetInitialState(), [new Todo(1, "a", false), new Todo(2, "b", false)]);
 
     [Fact]
@@ -227,7 +227,7 @@ public class EntityAdapterSetTests
             {"ids":[1,2,3],"entities":{"1":{"Id":1,"Text":"a","Done":false},"3":{"Id":3,"Text":"c","Done":false}}}
             """)!;
 
-        var state = JsonSerializer.Deserialize<EntityStateBlex<Todo, int>>(node, JsonBlex.Options)!;
+        var state = JsonSerializer.Deserialize<BlexEntityState<Todo, int>>(node, BlexJson.Options)!;
 
         Assert.Equal([1, 3], state.Ids);
         Assert.Equal(2, state.Count);
@@ -241,7 +241,7 @@ public class EntityAdapterSetTests
             {"ids":[1],"entities":{"1":{"Id":1,"Text":"a","Done":false},"2":{"Id":2,"Text":"b","Done":false}}}
             """)!;
 
-        var state = JsonSerializer.Deserialize<EntityStateBlex<Todo, int>>(node, JsonBlex.Options)!;
+        var state = JsonSerializer.Deserialize<BlexEntityState<Todo, int>>(node, BlexJson.Options)!;
 
         Assert.Equal([1, 2], state.Ids);
         Assert.Equal(2, state.Count);
@@ -255,7 +255,7 @@ public class EntityAdapterSetTests
             {"ids":[1,1,2],"entities":{"1":{"Id":1,"Text":"a","Done":false},"2":{"Id":2,"Text":"b","Done":false}}}
             """)!;
 
-        var state = JsonSerializer.Deserialize<EntityStateBlex<Todo, int>>(node, JsonBlex.Options)!;
+        var state = JsonSerializer.Deserialize<BlexEntityState<Todo, int>>(node, BlexJson.Options)!;
 
         Assert.Equal([1, 2], state.Ids);
         Assert.Equal(2, state.Count);
@@ -273,7 +273,7 @@ public class EntityAdapterSetTests
             [2] = new(2, "b", false),
         };
 
-        var state = new EntityStateBlex<Todo, int>(ids, entities);
+        var state = new BlexEntityState<Todo, int>(ids, entities);
 
         ids.Add(3);
         entities.Clear();
@@ -287,8 +287,8 @@ public class EntityAdapterSetTests
     public void AWellFormedPayload_RoundTripsUnchanged()
     {
         var state = Seeded();
-        var json = JsonSerializer.SerializeToNode(state, JsonBlex.Options)!;
-        var restored = JsonSerializer.Deserialize<EntityStateBlex<Todo, int>>(json, JsonBlex.Options)!;
+        var json = JsonSerializer.SerializeToNode(state, BlexJson.Options)!;
+        var restored = JsonSerializer.Deserialize<BlexEntityState<Todo, int>>(json, BlexJson.Options)!;
 
         Assert.Equal(state.Ids, restored.Ids);
         Assert.Equal([.. state.All], [.. restored.All]);

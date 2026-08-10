@@ -12,21 +12,21 @@ public class EmissionTests
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
 
-            [StoreAttributeBlex(Name = "counter", Persist = true)]
+            [BlexStoreAttribute(Name = "counter", Persist = true)]
             public partial class CounterStore
             {
-                [StateAttributeBlex] private int _count;
-                [StateAttributeBlex] private string? _label;
+                [BlexStateAttribute] private int _count;
+                [BlexStateAttribute] private string? _label;
 
-                [ComputedAttributeBlex] private int ComputeDouble() => Count * 2;
+                [BlexComputedAttribute] private int ComputeDouble() => Count * 2;
 
-                [ActionAttributeBlex] private void OnIncrement() => Count++;
-                [ActionAttributeBlex] private void OnAdd(int amount, string? note = null) => Count += amount;
+                [BlexActionAttribute] private void OnIncrement() => Count++;
+                [BlexActionAttribute] private void OnAdd(int amount, string? note = null) => Count += amount;
 
-                [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+                [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
                 private async Task OnLoad(int id, CancellationToken ct) => await Task.Delay(1, ct);
 
-                [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Queue)]
+                [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Queue)]
                 private async Task OnSave() => await Task.Yield();
             }
             """);
@@ -40,7 +40,7 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S { [StateAttributeBlex] private string? _userName; }
+            [BlexStoreAttribute] public partial class S { [BlexStateAttribute] private string? _userName; }
             """);
 
         Assert.Contains("public string? UserName", result.SingleGenerated);
@@ -52,10 +52,10 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ActionAttributeBlex] private void OnSet(int value, bool log = true, string tag = "none") => X = value;
+                [BlexStateAttribute] private int _x;
+                [BlexActionAttribute] private void OnSet(int value, bool log = true, string tag = "none") => X = value;
             }
             """);
 
@@ -70,9 +70,9 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [EffectAttributeBlex] private async Task OnLoad(int id, CancellationToken ct) => await Task.Delay(1, ct);
+                [BlexEffectAttribute] private async Task OnLoad(int id, CancellationToken ct) => await Task.Delay(1, ct);
             }
             """);
 
@@ -87,8 +87,8 @@ public class EmissionTests
     public void SameClassName_InDifferentNamespaces_GetsDistinctHintNames()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            namespace A { [StoreAttributeBlex] public partial class CartStore { [StateAttributeBlex] private int _n; } }
-            namespace B { [StoreAttributeBlex] public partial class CartStore { [StateAttributeBlex] private int _n; } }
+            namespace A { [BlexStoreAttribute] public partial class CartStore { [BlexStateAttribute] private int _n; } }
+            namespace B { [BlexStoreAttribute] public partial class CartStore { [BlexStateAttribute] private int _n; } }
             """);
 
         Assert.Equal(2, result.GeneratedSources.Count);
@@ -100,11 +100,11 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex(Name = "the \"weird\" store")]
+            [BlexStoreAttribute(Name = "the \"weird\" store")]
             public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ActionAttributeBlex(Name = "say \"hi\"")] private void OnGreet() => X++;
+                [BlexStateAttribute] private int _x;
+                [BlexActionAttribute(Name = "say \"hi\"")] private void OnGreet() => X++;
             }
             """);
 
@@ -115,7 +115,7 @@ public class EmissionTests
     public void GlobalNamespaceStore_Compiles()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class GlobalStore { [StateAttributeBlex] private int _x; }
+            [BlexStoreAttribute] public partial class GlobalStore { [BlexStateAttribute] private int _x; }
             """);
 
         Assert.Empty(result.CompileErrors());
@@ -126,7 +126,7 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S { [StateAttributeBlex] private string? _text; }
+            [BlexStoreAttribute] public partial class S { [BlexStateAttribute] private string? _text; }
             """);
 
         // Present-but-null must restore to default!, only a missing property is skipped.
@@ -139,10 +139,10 @@ public class EmissionTests
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
             public enum Mode { A = 0, B = 1 }
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ActionAttributeBlex] private void OnSet(Mode? mode = Mode.B, int? count = 5, bool? flag = null) => X++;
+                [BlexStateAttribute] private int _x;
+                [BlexActionAttribute] private void OnSet(Mode? mode = Mode.B, int? count = 5, bool? flag = null) => X++;
             }
             """);
 
@@ -156,10 +156,10 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ActionAttributeBlex(Name = "lock")] private void OnLock() => X++;
+                [BlexStateAttribute] private int _x;
+                [BlexActionAttribute(Name = "lock")] private void OnLock() => X++;
             }
             """);
 
@@ -174,11 +174,11 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex(Name = "line\nbreak\ttab")]
+            [BlexStoreAttribute(Name = "line\nbreak\ttab")]
             public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ActionAttributeBlex(Name = "do\nthing")] private void OnGo() => X++;
+                [BlexStateAttribute] private int _x;
+                [BlexActionAttribute(Name = "do\nthing")] private void OnGo() => X++;
             }
             """);
 
@@ -190,10 +190,10 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _value;
-                [ComputedAttributeBlex] private int ComputeValue() => 1;
+                [BlexStateAttribute] private int _value;
+                [BlexComputedAttribute] private int ComputeValue() => 1;
             }
             """);
 
@@ -207,10 +207,10 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ComputedAttributeBlex] private int ComputeFoo() => X;
+                [BlexStateAttribute] private int _x;
+                [BlexComputedAttribute] private int ComputeFoo() => X;
                 private bool __FooValid; // collides with the memoization backing field
             }
             """);
@@ -224,11 +224,11 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ActionAttributeBlex] private void OnDoThing(int @lock, string @class) => X = @lock + @class.Length;
-                [EffectAttributeBlex] private async Task OnLoad(int @event, CancellationToken ct) { await Task.Delay(1, ct); X = @event; }
+                [BlexStateAttribute] private int _x;
+                [BlexActionAttribute] private void OnDoThing(int @lock, string @class) => X = @lock + @class.Length;
+                [BlexEffectAttribute] private async Task OnLoad(int @event, CancellationToken ct) { await Task.Delay(1, ct); X = @event; }
             }
             """);
 
@@ -241,10 +241,10 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private string? state;   // collides with DeserializeState's parameter
-                [StateAttributeBlex] private int value;       // collides with the setter's implicit parameter
+                [BlexStateAttribute] private string? state;   // collides with DeserializeState's parameter
+                [BlexStateAttribute] private int value;       // collides with the setter's implicit parameter
             }
             """);
 
@@ -259,10 +259,10 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+                [BlexStateAttribute] private int _x;
+                [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
                 private async Task OnLoad(int __ct, CancellationToken ct) { await Task.Delay(1, ct); X = __ct; }
             }
             """);
@@ -275,10 +275,10 @@ public class EmissionTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _total;
-                [ActionAttributeBlex] private void OnAddAll(params int[] values) { foreach (var v in values) Total += v; }
+                [BlexStateAttribute] private int _total;
+                [BlexActionAttribute] private void OnAddAll(params int[] values) { foreach (var v in values) Total += v; }
             }
             """);
 
@@ -288,17 +288,17 @@ public class EmissionTests
 
     [Theory]
     [InlineData("")]
-    [InlineData("Concurrency = EffectConcurrencyBlex.Latest")]
-    [InlineData("Concurrency = EffectConcurrencyBlex.Drop")]
-    [InlineData("Concurrency = EffectConcurrencyBlex.Queue")]
+    [InlineData("Concurrency = BlexEffectConcurrency.Latest")]
+    [InlineData("Concurrency = BlexEffectConcurrency.Drop")]
+    [InlineData("Concurrency = BlexEffectConcurrency.Queue")]
     public void EffectWrapper_TakesTheVetoDecisionBeforeTouchingAnyLifecycleState(string concurrency)
     {
-        var attribute = concurrency.Length == 0 ? "[EffectAttributeBlex]" : $"[EffectAttributeBlex({concurrency})]";
+        var attribute = concurrency.Length == 0 ? "[BlexEffectAttribute]" : $"[BlexEffectAttribute({concurrency})]";
         var result = GeneratorTestHelper.Run(Usings + $$"""
             namespace App;
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
+                [BlexStateAttribute] private int _x;
                 {{attribute}}
                 private async Task OnLoad(int id, CancellationToken ct) { await Task.Delay(1, ct); X = id; }
             }

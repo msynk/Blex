@@ -1,5 +1,5 @@
 @page "/middleware"
-@inherits ComponentBaseBlex
+@inherits BlexComponentBase
 @inject CounterStore Counter
 @inject DemoGuard Guard
 @inject ActionFeed Feed
@@ -123,7 +123,7 @@
     </DemoCard>
 
     <h2>The pre-action context</h2>
-    <ApiTable Title="PreActionContextBlex" Rows="@PreRows" />
+    <ApiTable Title="BlexPreActionContext" Rows="@PreRows" />
 
     <p>
         Because the payload is available before the mutation, a filter can validate arguments and
@@ -144,7 +144,7 @@
     <p>
         With no middleware, no DevTools connection and no subscribers, the manager reports
         <code>HasObservers == false</code> and the whole recording step is skipped. Generated
-        wrappers check the same flag before allocating their <code>ActionArgBlex[]</code>, so an app that
+        wrappers check the same flag before allocating their <code>BlexActionArg[]</code>, so an app that
         observes nothing pays nothing for the machinery.
     </p>
 
@@ -185,28 +185,28 @@
     [
         new("options.UseMiddleware&lt;T&gt;()", "Registers the type as scoped and resolves it from DI - use this whenever the middleware has dependencies or per-scope state."),
         new("options.UseMiddleware(instance)", "Registers a pre-built instance. Shared across every scope."),
-        new("options.UseMiddleware(Action&lt;ActionContextBlex&gt;)", "Wraps a delegate in <code>DelegateMiddlewareBlex</code>. Handy for one-line logging."),
-        new("options.UseFilter(Func&lt;PreActionContextBlex, bool&gt;)", "Wraps a predicate in <code>FilterMiddlewareBlex</code>. Return <code>false</code> to veto."),
+        new("options.UseMiddleware(Action&lt;BlexActionContext&gt;)", "Wraps a delegate in <code>BlexDelegateMiddleware</code>. Handy for one-line logging."),
+        new("options.UseFilter(Func&lt;BlexPreActionContext, bool&gt;)", "Wraps a predicate in <code>BlexFilterMiddleware</code>. Return <code>false</code> to veto."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> PreRows =
     [
-        new("IStoreBlex Store", "The store about to produce the action."),
+        new("IBlexStore Store", "The store about to produce the action."),
         new("string ActionName", "The bare action name."),
         new("string QualifiedName", "<code>\"storeName/ActionName\"</code>."),
-        new("IReadOnlyList&lt;ActionArgBlex&gt; Args", "The arguments the action was called with - available <em>before</em> anything mutates."),
+        new("IReadOnlyList&lt;BlexActionArg&gt; Args", "The arguments the action was called with - available <em>before</em> anything mutates."),
         new("bool IsCancelled", "Whether a middleware has already vetoed this action."),
         new("void Cancel()", "Veto: the mutation does not run and nothing is recorded."),
     ];
 
     private const string Interface = """
-        public interface IMiddlewareBlex
+        public interface IBlexMiddleware
         {
             // After the action has been applied to its store.
-            void OnAction(ActionContextBlex context);
+            void OnAction(BlexActionContext context);
 
             // Before it runs. The default implementation does nothing.
-            void BeforeAction(PreActionContextBlex context) { }
+            void BeforeAction(BlexPreActionContext context) { }
         }
         """;
 
@@ -228,9 +228,9 @@
         """;
 
     private const string Observe = """
-        public sealed class AuditMiddleware(IAuditLog log) : IMiddlewareBlex
+        public sealed class AuditMiddleware(IAuditLog log) : IBlexMiddleware
         {
-            public void OnAction(ActionContextBlex context)
+            public void OnAction(BlexActionContext context)
             {
                 log.Write(new AuditEntry(
                     Action:   context.QualifiedName,
@@ -242,9 +242,9 @@
         """;
 
     private const string FeedSource = """
-        public sealed class ActionFeedMiddleware(ActionFeed feed) : IMiddlewareBlex
+        public sealed class ActionFeedMiddleware(ActionFeed feed) : IBlexMiddleware
         {
-            public void OnAction(ActionContextBlex context) => feed.Add(context);
+            public void OnAction(BlexActionContext context) => feed.Add(context);
         }
 
         // Program.cs
@@ -253,11 +253,11 @@
         """;
 
     private const string Veto = """
-        public sealed class ReadOnlyMiddleware(AppMode mode) : IMiddlewareBlex
+        public sealed class ReadOnlyMiddleware(AppMode mode) : IBlexMiddleware
         {
-            public void OnAction(ActionContextBlex context) { }
+            public void OnAction(BlexActionContext context) { }
 
-            public void BeforeAction(PreActionContextBlex context)
+            public void BeforeAction(BlexPreActionContext context)
             {
                 if (mode.IsReadOnly)
                     context.Cancel();   // the mutation never runs
@@ -266,11 +266,11 @@
         """;
 
     private const string GuardSource = """
-        public sealed class GuardMiddleware(DemoGuard guard) : IMiddlewareBlex
+        public sealed class GuardMiddleware(DemoGuard guard) : IBlexMiddleware
         {
-            public void OnAction(ActionContextBlex context) { }
+            public void OnAction(BlexActionContext context) { }
 
-            public void BeforeAction(PreActionContextBlex context)
+            public void BeforeAction(BlexPreActionContext context)
             {
                 if (!guard.IsReadOnly || guard.AlwaysAllow.Contains(context.QualifiedName))
                     return;

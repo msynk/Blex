@@ -10,7 +10,7 @@ public class DiagnosticTests
     public void NotPartial_ReportsBLEX001()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public class S { [StateAttributeBlex] private int _x; }
+            [BlexStoreAttribute] public class S { [BlexStateAttribute] private int _x; }
             """);
         Assert.True(result.HasDiagnostic("BLEX001"));
     }
@@ -19,7 +19,7 @@ public class DiagnosticTests
     public void ActionWithoutOnPrefix_ReportsBLEX002()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [ActionAttributeBlex] private void Increment() { } }
+            [BlexStoreAttribute] public partial class S { [BlexActionAttribute] private void Increment() { } }
             """);
         Assert.True(result.HasDiagnostic("BLEX002"));
     }
@@ -28,7 +28,7 @@ public class DiagnosticTests
     public void ComputedWithBadName_ReportsBLEX003()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [ComputedAttributeBlex] private int Twice() => 2; }
+            [BlexStoreAttribute] public partial class S { [BlexComputedAttribute] private int Twice() => 2; }
             """);
         Assert.True(result.HasDiagnostic("BLEX003"));
     }
@@ -37,7 +37,7 @@ public class DiagnosticTests
     public void ComputedWithParameters_ReportsBLEX004()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [ComputedAttributeBlex] private int ComputeX(int y) => y; }
+            [BlexStoreAttribute] public partial class S { [BlexComputedAttribute] private int ComputeX(int y) => y; }
             """);
         Assert.True(result.HasDiagnostic("BLEX004"));
     }
@@ -46,10 +46,10 @@ public class DiagnosticTests
     public void CollidingGeneratedNames_ReportsBLEX005()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _value;
-                [ComputedAttributeBlex] private int ComputeValue() => 1;
+                [BlexStateAttribute] private int _value;
+                [BlexComputedAttribute] private int ComputeValue() => 1;
             }
             """);
         Assert.True(result.HasDiagnostic("BLEX005"));
@@ -59,9 +59,9 @@ public class DiagnosticTests
     public void CollisionWithUserMember_ReportsBLEX005()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _count;
+                [BlexStateAttribute] private int _count;
                 public int Count => 42; // user already declared what the generator would emit
             }
             """);
@@ -72,16 +72,16 @@ public class DiagnosticTests
     public void CollisionWithReservedName_ReportsBLEX005()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [StateAttributeBlex] private string _name; }
+            [BlexStoreAttribute] public partial class S { [BlexStateAttribute] private string _name; }
             """);
-        Assert.True(result.HasDiagnostic("BLEX005")); // Name is a StoreBaseBlex member
+        Assert.True(result.HasDiagnostic("BLEX005")); // Name is a BlexStoreBase member
     }
 
     [Fact]
     public void NestedStore_ReportsBLEX006()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            public class Outer { [StoreAttributeBlex] public partial class S { [StateAttributeBlex] private int _x; } }
+            public class Outer { [BlexStoreAttribute] public partial class S { [BlexStateAttribute] private int _x; } }
             """);
         Assert.True(result.HasDiagnostic("BLEX006"));
     }
@@ -90,7 +90,7 @@ public class DiagnosticTests
     public void SyncEffect_ReportsBLEX007()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [EffectAttributeBlex] private void OnLoad() { } }
+            [BlexStoreAttribute] public partial class S { [BlexEffectAttribute] private void OnLoad() { } }
             """);
         Assert.True(result.HasDiagnostic("BLEX007"));
     }
@@ -99,7 +99,7 @@ public class DiagnosticTests
     public void StaticStateField_ReportsBLEX008()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [StateAttributeBlex] private static int _x; }
+            [BlexStoreAttribute] public partial class S { [BlexStateAttribute] private static int _x; }
             """);
         Assert.True(result.HasDiagnostic("BLEX008"));
     }
@@ -108,7 +108,7 @@ public class DiagnosticTests
     public void ReadonlyStateField_ReportsBLEX008()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [StateAttributeBlex] private readonly int _x; }
+            [BlexStoreAttribute] public partial class S { [BlexStateAttribute] private readonly int _x; }
             """);
         Assert.True(result.HasDiagnostic("BLEX008"));
     }
@@ -117,9 +117,9 @@ public class DiagnosticTests
     public void LatestEffectWithoutToken_ReportsBLEX009Warning()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [EffectAttributeBlex(Concurrency = EffectConcurrencyBlex.Latest)]
+                [BlexEffectAttribute(Concurrency = BlexEffectConcurrency.Latest)]
                 private async Task OnSearch(string q) => await Task.Yield();
             }
             """);
@@ -131,7 +131,7 @@ public class DiagnosticTests
     public void AsyncVoidAction_ReportsBLEX010()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [ActionAttributeBlex] private async void OnFire() => await Task.Yield(); }
+            [BlexStoreAttribute] public partial class S { [BlexActionAttribute] private async void OnFire() => await Task.Yield(); }
             """);
         Assert.True(result.HasDiagnostic("BLEX010"));
     }
@@ -140,7 +140,7 @@ public class DiagnosticTests
     public void ValueReturningAction_ReportsBLEX011Warning()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [ActionAttributeBlex] private int OnCalc() => 42; }
+            [BlexStoreAttribute] public partial class S { [BlexActionAttribute] private int OnCalc() => 42; }
             """);
         Assert.True(result.HasDiagnostic("BLEX011"));
         Assert.False(result.HasGeneratorError);
@@ -150,7 +150,7 @@ public class DiagnosticTests
     public void StateFieldWithoutPrefix_ReportsBLEX012()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [StateAttributeBlex] private int Count; }
+            [BlexStoreAttribute] public partial class S { [BlexStateAttribute] private int Count; }
             """);
         Assert.True(result.HasDiagnostic("BLEX012"));
     }
@@ -159,7 +159,7 @@ public class DiagnosticTests
     public void RefParameter_ReportsBLEX013()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [ActionAttributeBlex] private void OnPush(ref int x) { } }
+            [BlexStoreAttribute] public partial class S { [BlexActionAttribute] private void OnPush(ref int x) { } }
             """);
         Assert.True(result.HasDiagnostic("BLEX013"));
     }
@@ -168,7 +168,7 @@ public class DiagnosticTests
     public void GenericActionMethod_ReportsBLEX014()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S { [ActionAttributeBlex] private void OnSet<T>(T value) { } }
+            [BlexStoreAttribute] public partial class S { [BlexActionAttribute] private void OnSet<T>(T value) { } }
             """);
         Assert.True(result.HasDiagnostic("BLEX014"));
     }
@@ -177,7 +177,7 @@ public class DiagnosticTests
     public void RecordStore_ReportsBLEX015()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial record S { [StateAttributeBlex] private int _x; }
+            [BlexStoreAttribute] public partial record S { [BlexStateAttribute] private int _x; }
             """);
         Assert.True(result.HasDiagnostic("BLEX015"));
     }
@@ -187,7 +187,7 @@ public class DiagnosticTests
     {
         var result = GeneratorTestHelper.Run(Usings + """
             public class MyBase { }
-            [StoreAttributeBlex] public partial class S : MyBase { [StateAttributeBlex] private int _x; }
+            [BlexStoreAttribute] public partial class S : MyBase { [BlexStateAttribute] private int _x; }
             """);
         Assert.True(result.HasDiagnostic("BLEX016"));
     }
@@ -196,7 +196,7 @@ public class DiagnosticTests
     public void GenericStore_ReportsBLEX006()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S<T> { [StateAttributeBlex] private int _x; }
+            [BlexStoreAttribute] public partial class S<T> { [BlexStateAttribute] private int _x; }
             """);
         Assert.True(result.HasDiagnostic("BLEX006"));
     }
@@ -204,10 +204,10 @@ public class DiagnosticTests
     [Fact]
     public void StaticStore_ReportsBLEX006()
     {
-        // A static class cannot derive from StoreBaseBlex or hold the instance members the generator
+        // A static class cannot derive from BlexStoreBase or hold the instance members the generator
         // emits; without this the user gets four raw CS errors inside generated code.
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public static partial class S { }
+            [BlexStoreAttribute] public static partial class S { }
             """);
         Assert.True(result.HasDiagnostic("BLEX006"));
         Assert.Empty(result.GeneratedSources);
@@ -216,12 +216,12 @@ public class DiagnosticTests
     [Fact]
     public void GeneratedMemberCollidingWithBeginAction_ReportsBLEX005()
     {
-        // BeginAction/DispatchApprovedAsync are StoreBaseBlex members the effect wrappers call.
+        // BeginAction/DispatchApprovedAsync are BlexStoreBase members the effect wrappers call.
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ActionAttributeBlex] private void OnBeginAction() { }
+                [BlexStateAttribute] private int _x;
+                [BlexActionAttribute] private void OnBeginAction() { }
             }
             """);
         Assert.True(result.HasDiagnostic("BLEX005"));
@@ -232,10 +232,10 @@ public class DiagnosticTests
     {
         // `public void X { get { ... } }` does not compile; the memoized property needs a value.
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ComputedAttributeBlex] private void ComputeThing() { }
+                [BlexStateAttribute] private int _x;
+                [BlexComputedAttribute] private void ComputeThing() { }
             }
             """);
         Assert.True(result.HasDiagnostic("BLEX017"));
@@ -245,12 +245,12 @@ public class DiagnosticTests
     public void VoidComputed_StillEmitsTheRestOfTheStoreWithoutCompileErrors()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ComputedAttributeBlex] private void ComputeThing() { }
-                [ComputedAttributeBlex] private int ComputeDouble() => X * 2;
-                [ActionAttributeBlex] private void OnBump() => X++;
+                [BlexStateAttribute] private int _x;
+                [BlexComputedAttribute] private void ComputeThing() { }
+                [BlexComputedAttribute] private int ComputeDouble() => X * 2;
+                [BlexActionAttribute] private void OnBump() => X++;
             }
             """);
 
@@ -264,10 +264,10 @@ public class DiagnosticTests
     [Fact]
     public void StateFieldOutsideAStore_ReportsBLEX018()
     {
-        // Without the [StoreAttributeBlex] the whole file compiles cleanly and generates nothing,
+        // Without the [BlexStoreAttribute] the whole file compiles cleanly and generates nothing,
         // which is indistinguishable from a broken generator. Say so.
         var result = GeneratorTestHelper.Run(Usings + """
-            public partial class NotAStore { [StateAttributeBlex] private int _x; }
+            public partial class NotAStore { [BlexStateAttribute] private int _x; }
             """);
         Assert.True(result.HasDiagnostic("BLEX018"));
     }
@@ -278,9 +278,9 @@ public class DiagnosticTests
         var result = GeneratorTestHelper.Run(Usings + """
             public partial class NotAStore
             {
-                [ComputedAttributeBlex] private int ComputeX() => 1;
-                [ActionAttributeBlex] private void OnBump() { }
-                [EffectAttributeBlex] private Task OnLoad() => Task.CompletedTask;
+                [BlexComputedAttribute] private int ComputeX() => 1;
+                [BlexActionAttribute] private void OnBump() { }
+                [BlexEffectAttribute] private Task OnLoad() => Task.CompletedTask;
             }
             """);
         Assert.True(result.HasDiagnostic("BLEX018"));
@@ -291,12 +291,12 @@ public class DiagnosticTests
     public void MembersInsideAStore_DoNotReportBLEX018()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [ComputedAttributeBlex] private int ComputeDouble() => X * 2;
-                [ActionAttributeBlex] private void OnBump() => X++;
-                [EffectAttributeBlex] private Task OnLoad() => Task.CompletedTask;
+                [BlexStateAttribute] private int _x;
+                [BlexComputedAttribute] private int ComputeDouble() => X * 2;
+                [BlexActionAttribute] private void OnBump() => X++;
+                [BlexEffectAttribute] private Task OnLoad() => Task.CompletedTask;
             }
             """);
         Assert.False(result.HasDiagnostic("BLEX018"));
@@ -308,10 +308,10 @@ public class DiagnosticTests
     {
         // Task.Delay throws on a negative delay, at runtime, from inside generated code.
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [EffectAttributeBlex(DebounceMilliseconds = -1)] private Task OnLoad() => Task.CompletedTask;
+                [BlexStateAttribute] private int _x;
+                [BlexEffectAttribute(DebounceMilliseconds = -1)] private Task OnLoad() => Task.CompletedTask;
             }
             """);
         Assert.True(result.HasDiagnostic("BLEX019"));
@@ -321,11 +321,11 @@ public class DiagnosticTests
     public void ZeroDebounce_IsTheDefaultAndReportsNothing()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [EffectAttributeBlex(DebounceMilliseconds = 0)] private Task OnLoad() => Task.CompletedTask;
-                [EffectAttributeBlex] private Task OnOther() => Task.CompletedTask;
+                [BlexStateAttribute] private int _x;
+                [BlexEffectAttribute(DebounceMilliseconds = 0)] private Task OnLoad() => Task.CompletedTask;
+                [BlexEffectAttribute] private Task OnOther() => Task.CompletedTask;
             }
             """);
         Assert.False(result.HasDiagnostic("BLEX019"));
@@ -337,10 +337,10 @@ public class DiagnosticTests
     public void PositiveDebounce_EmitsTheGateBeforeAnythingObservable()
     {
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                [EffectAttributeBlex(DebounceMilliseconds = 250)] private Task OnSearch(string q) => Task.CompletedTask;
+                [BlexStateAttribute] private int _x;
+                [BlexEffectAttribute(DebounceMilliseconds = 250)] private Task OnSearch(string q) => Task.CompletedTask;
             }
             """);
 
@@ -358,10 +358,10 @@ public class DiagnosticTests
     {
         // The nested type is not itself a store, so nothing is generated for its members either.
         var result = GeneratorTestHelper.Run(Usings + """
-            [StoreAttributeBlex] public partial class S
+            [BlexStoreAttribute] public partial class S
             {
-                [StateAttributeBlex] private int _x;
-                public class Inner { [StateAttributeBlex] private int _y; }
+                [BlexStateAttribute] private int _x;
+                public class Inner { [BlexStateAttribute] private int _y; }
             }
             """);
         Assert.True(result.HasDiagnostic("BLEX018"));

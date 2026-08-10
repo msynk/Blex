@@ -9,14 +9,14 @@ namespace Blex.Tests;
 
 /// <summary>
 /// State fields compare by reference, so an adapter operation that changes nothing must hand back
-/// the very same <see cref="EntityStateBlex{TEntity, TKey}"/> instance -- otherwise it raises a change
+/// the very same <see cref="BlexEntityState{TEntity, TKey}"/> instance -- otherwise it raises a change
 /// notification and records a time-travel action for a mutation that never happened.
 /// </summary>
 public class EntityNoOpTests
 {
-    private static readonly EntityAdapterBlex<Todo, int> Adapter = new(t => t.Id);
+    private static readonly BlexEntityAdapter<Todo, int> Adapter = new(t => t.Id);
 
-    private static EntityStateBlex<Todo, int> Seeded()
+    private static BlexEntityState<Todo, int> Seeded()
         => Adapter.SetAll(Adapter.GetInitialState(), [new Todo(1, "a", false), new Todo(2, "b", false)]);
 
     [Fact]
@@ -84,7 +84,7 @@ public class EntityNoOpTests
     public void NoOpAdapterCall_InsideAnAction_RecordsNothingAndDoesNotNotify()
     {
         var store = new EntityTodoStore();
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         manager.Register(store);
         var recorded = new List<string>();
         using var sub = manager.Subscribe(ctx => recorded.Add(ctx.ActionName));
@@ -118,7 +118,7 @@ public class EntityNoOpTests
         // A persisted payload whose halves are missing/null must not produce an instance that
         // throws the moment a component enumerates it.
         var node = JsonNode.Parse("""{"ids":null,"entities":null}""")!;
-        var state = JsonSerializer.Deserialize<EntityStateBlex<Todo, int>>(node, JsonBlex.Options)!;
+        var state = JsonSerializer.Deserialize<BlexEntityState<Todo, int>>(node, BlexJson.Options)!;
 
         Assert.Equal(0, state.Count);
         Assert.Empty(state.All);

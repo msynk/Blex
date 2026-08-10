@@ -27,7 +27,7 @@ builder.Services.AddBlexStore<CounterStore>();
 builder.Services.AddBlexStore<TodoStore>();
 builder.Services.AddBlexStore<WeatherStore>();
 
-// Persist [StoreAttributeBlex(Persist = true)] stores to localStorage (debounced so bursts of clicks
+// Persist [BlexStoreAttribute(Persist = true)] stores to localStorage (debounced so bursts of clicks
 // coalesce into one write), and enable in-app undo/redo.
 builder.Services.AddBlexLocalStoragePersistence(options =>
     options.DebounceInterval = TimeSpan.FromMilliseconds(300));

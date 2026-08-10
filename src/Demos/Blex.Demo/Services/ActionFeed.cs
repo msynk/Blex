@@ -27,7 +27,7 @@ public sealed class ActionFeed
     /// <summary>Total number of actions seen since the app started (not capped by the window).</summary>
     public int TotalSeen { get; private set; }
 
-    internal void Add(ActionContextBlex context)
+    internal void Add(BlexActionContext context)
     {
         TotalSeen++;
         var args = context.Args.Count == 0
@@ -65,8 +65,8 @@ public sealed class ActionFeed
 /// Registered with <c>options.UseMiddleware&lt;ActionFeedMiddleware&gt;()</c> so it can take
 /// scoped dependencies from DI.
 /// </summary>
-public sealed class ActionFeedMiddleware(ActionFeed feed) : IMiddlewareBlex
+public sealed class ActionFeedMiddleware(ActionFeed feed) : IBlexMiddleware
 {
     /// <inheritdoc />
-    public void OnAction(ActionContextBlex context) => feed.Add(context);
+    public void OnAction(BlexActionContext context) => feed.Add(context);
 }

@@ -122,7 +122,7 @@ public static class CodeHighlighter
                 continue;
             }
 
-            // Attributes: a '[' that opens a line is [StoreAttributeBlex], [StateAttributeBlex], ... rather than an indexer.
+            // Attributes: a '[' that opens a line is [BlexStoreAttribute], [BlexStateAttribute], ... rather than an indexer.
             if (c == '[' && atLineStart)
             {
                 var j = i + 1;

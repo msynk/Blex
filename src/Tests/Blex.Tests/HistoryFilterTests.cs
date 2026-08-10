@@ -7,19 +7,19 @@ namespace Blex.Tests;
 /// <summary>
 /// The history filter (redux-undo's <c>filter</c>) decides which actions get their own undo step.
 /// A filtered action still applies and still moves the present forward -- it simply does not become
-/// a separate step, so the next <see cref="HistoryBlex.Undo"/> reverts it together with the recorded
+/// a separate step, so the next <see cref="BlexHistory.Undo"/> reverts it together with the recorded
 /// action before it. That distinction is what keeps keystroke-level noise out of an undo stack the
 /// user thinks about in whole edits.
 /// </summary>
 public class HistoryFilterTests
 {
-    private static (ManagerBlex Manager, CounterStore Counter, HistoryBlex History) Setup(
-        Func<ActionContextBlex, bool>? filter)
+    private static (BlexManager Manager, CounterStore Counter, BlexHistory History) Setup(
+        Func<BlexActionContext, bool>? filter)
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
-        var history = new HistoryBlex(manager, 100, filter);
+        var history = new BlexHistory(manager, 100, filter);
         history.Start();
         return (manager, counter, history);
     }
@@ -98,13 +98,13 @@ public class HistoryFilterTests
     [Fact]
     public void AThrowingFilter_FailsOpenAndIsReported()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
-        var errors = new List<ErrorBlex>();
+        var errors = new List<BlexError>();
         manager.OnError = errors.Add;
 
-        var history = new HistoryBlex(manager, 100, _ => throw new InvalidOperationException("filter boom"));
+        var history = new BlexHistory(manager, 100, _ => throw new InvalidOperationException("filter boom"));
         history.Start();
 
         counter.Increment(); // must not throw
@@ -224,10 +224,10 @@ public class HistoryFilterTests
     [Fact]
     public void Checkpoint_RespectsMaxEntries()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
-        var history = new HistoryBlex(manager, 2, _ => false);
+        var history = new BlexHistory(manager, 2, _ => false);
         history.Start();
 
         counter.Count = 1;
@@ -243,10 +243,10 @@ public class HistoryFilterTests
     [Fact]
     public void Checkpoint_BeforeStart_StillEstablishesABaseline()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
-        var history = new HistoryBlex(manager, 100, _ => false);
+        var history = new BlexHistory(manager, 100, _ => false);
 
         counter.Count = 5;
         history.Checkpoint(); // no present yet: nothing to push, but the baseline is taken

@@ -5,12 +5,12 @@ namespace Blex.Tests;
 
 public class HistoryTests
 {
-    private static (ManagerBlex, CounterStore, HistoryBlex) Setup(int max = 100)
+    private static (BlexManager, CounterStore, BlexHistory) Setup(int max = 100)
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
-        var history = new HistoryBlex(manager, max);
+        var history = new BlexHistory(manager, max);
         history.Start();
         return (manager, counter, history);
     }
@@ -81,10 +81,10 @@ public class HistoryTests
     [Fact]
     public void Undo_DoesNotRecordNewActions()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
-        var history = new HistoryBlex(manager);
+        var history = new BlexHistory(manager);
         history.Start();
 
         counter.Increment();
@@ -125,15 +125,15 @@ public class HistoryTests
     [Fact]
     public void ThrowingChangedHandler_DoesNotBreakObserversRegisteredAfterHistory()
     {
-        var manager = new ManagerBlex();
+        var manager = new BlexManager();
         var counter = new CounterStore();
         manager.Register(counter);
 
-        var history = new HistoryBlex(manager);
+        var history = new BlexHistory(manager);
         history.Start(); // subscribes to ActionDispatched first
         history.Changed += () => throw new System.InvalidOperationException("ui boom");
 
-        var errors = new System.Collections.Generic.List<ErrorBlex>();
+        var errors = new System.Collections.Generic.List<BlexError>();
         manager.OnError = errors.Add;
 
         // A later observer (like the persistor) must still be notified.

@@ -4,43 +4,43 @@ using Blex;
 namespace Blex.Sample.Stores;
 
 /// <summary>
-/// A todo store demonstrating normalized collection state via <see cref="EntityAdapterBlex{TEntity, TKey}"/>
-/// (the Redux Toolkit <c>createEntityAdapter</c> pattern), computed counts and an <c>[EffectAttributeBlex]</c>
+/// A todo store demonstrating normalized collection state via <see cref="BlexEntityAdapter{TEntity, TKey}"/>
+/// (the Redux Toolkit <c>createEntityAdapter</c> pattern), computed counts and an <c>[BlexEffectAttribute]</c>
 /// with a generated loading/error lifecycle (<c>SeedIsLoading</c>/<c>SeedError</c>).
 /// </summary>
-[StoreAttributeBlex(Name = "todos")]
+[BlexStoreAttribute(Name = "todos")]
 public partial class TodoStore
 {
-    private static readonly EntityAdapterBlex<TodoItem, Guid> Adapter = new(t => t.Id);
+    private static readonly BlexEntityAdapter<TodoItem, Guid> Adapter = new(t => t.Id);
 
-    [StateAttributeBlex] private EntityStateBlex<TodoItem, Guid> _items = Adapter.GetInitialState();
+    [BlexStateAttribute] private BlexEntityState<TodoItem, Guid> _items = Adapter.GetInitialState();
 
-    [ComputedAttributeBlex]
+    [BlexComputedAttribute]
     private int ComputeRemaining() => Items.All.Count(i => !i.Done);
 
-    [ComputedAttributeBlex]
+    [BlexComputedAttribute]
     private int ComputeTotal() => Items.Count;
 
-    [ActionAttributeBlex]
+    [BlexActionAttribute]
     private void OnAdd(string text)
     {
         if (!string.IsNullOrWhiteSpace(text))
             Items = Adapter.AddOne(Items, new TodoItem(Guid.NewGuid(), text.Trim(), false));
     }
 
-    [ActionAttributeBlex]
+    [BlexActionAttribute]
     private void OnToggle(Guid id)
         => Items = Adapter.UpdateOne(Items, id, i => i with { Done = !i.Done });
 
-    [ActionAttributeBlex]
+    [BlexActionAttribute]
     private void OnRemove(Guid id)
         => Items = Adapter.RemoveOne(Items, id);
 
-    [ActionAttributeBlex]
+    [BlexActionAttribute]
     private void OnClearCompleted()
         => Items = Adapter.RemoveMany(Items, Items.All.Where(i => i.Done).Select(i => i.Id).ToList());
 
-    [ActionAttributeBlex]
+    [BlexActionAttribute]
     private void OnCompleteAll()
         => Items = Adapter.Map(Items, i => i with { Done = true });
 
@@ -49,7 +49,7 @@ public partial class TodoStore
     /// <c>SeedSampleDataIsLoading</c> and <c>SeedSampleDataError</c> properties -- no hand-rolled
     /// loading flag needed. The whole body records as one time-travelable action.
     /// </summary>
-    [EffectAttributeBlex(Name = "SeedSampleData")]
+    [BlexEffectAttribute(Name = "SeedSampleData")]
     private async Task OnSeedSampleData()
     {
         await Task.Delay(400); // pretend to call an API
