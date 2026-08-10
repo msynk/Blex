@@ -5,8 +5,15 @@ namespace Blex;
 /// <summary>Configuration for the Blex manager, populated via <c>AddBlex</c>.</summary>
 public sealed class BlexOptions
 {
-    internal List<Type> MiddlewareTypes { get; } = [];
-    internal List<IBlexMiddleware> MiddlewareInstances { get; } = [];
+    /// <summary>
+    /// Every registered middleware in registration order. Each entry is either a <see cref="Type"/>
+    /// to resolve from DI or a ready <see cref="IBlexMiddleware"/> instance. Kept as one list so the
+    /// pipeline runs in the order it was written: order decides which veto is consulted first and
+    /// what a logger sees, and splitting the two kinds into separate lists silently reordered them.
+    /// </summary>
+    internal List<object> MiddlewareEntries { get; } = [];
+
+    internal IEnumerable<Type> MiddlewareTypes => MiddlewareEntries.OfType<Type>();
 
     /// <summary>Display name shown in Redux DevTools. Defaults to <c>"Blex"</c>.</summary>
     public string DevToolsName { get; set; } = "Blex";
@@ -26,6 +33,21 @@ public sealed class BlexOptions
     /// <see cref="BlexManager.OnError"/>. When unset, errors go to <see cref="Console.Error"/>.
     /// </summary>
     public Action<BlexError>? OnError { get; set; }
+
+    /// <summary>
+    /// Called when an action or effect body throws, with the store, action, arguments and
+    /// exception. Wired onto <see cref="BlexManager.ActionFailed"/>.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="OnError"/>, which reports failures Blex <em>isolates</em> from the
+    /// pipeline (a throwing subscriber, a failed storage write). This one reports the application's
+    /// own action bodies failing -- the thing a crash reporter actually wants -- and does not
+    /// suppress the exception. Cancellation is not reported; see <see cref="BlexActionErrorContext"/>.
+    /// </remarks>
+    /// <example><code>
+    /// options.OnActionError = ctx => _logger.LogError(ctx.Exception, "[blex] {Action} failed", ctx.QualifiedName);
+    /// </code></example>
+    public Action<BlexActionErrorContext>? OnActionError { get; set; }
 
     /// <summary>
     /// Convenience: redacts the named keys (recursively, anywhere in the tree -- including inside
@@ -101,25 +123,25 @@ public sealed class BlexOptions
         }
     }
 
-    /// <summary>Registers a middleware type resolved from DI.</summary>
+    /// <summary>Registers a middleware type resolved from DI. Runs in registration order.</summary>
     public BlexOptions UseMiddleware<TMiddleware>() where TMiddleware : class, IBlexMiddleware
     {
-        MiddlewareTypes.Add(typeof(TMiddleware));
+        MiddlewareEntries.Add(typeof(TMiddleware));
         return this;
     }
 
-    /// <summary>Registers a pre-built middleware instance.</summary>
+    /// <summary>Registers a pre-built middleware instance. Runs in registration order.</summary>
     /// <remarks>
     /// The instance is stored on the (singleton) options and therefore shared across every DI
     /// scope. Under Blazor Server that means it is shared across all circuits, so avoid holding
     /// per-user state in it. Use <see cref="UseMiddleware{TMiddleware}"/> for scoped, per-circuit
-    /// middleware. Ordering note: all DI-registered middleware (<see cref="UseMiddleware{TMiddleware}"/>)
-    /// run before instance/delegate middleware, regardless of registration interleaving.
+    /// middleware. Middleware registered directly in the service collection, rather than through
+    /// these methods, runs after everything registered here.
     /// </remarks>
     public BlexOptions UseMiddleware(IBlexMiddleware middleware)
     {
         ArgumentNullException.ThrowIfNull(middleware);
-        MiddlewareInstances.Add(middleware);
+        MiddlewareEntries.Add(middleware);
         return this;
     }
 

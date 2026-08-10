@@ -31,6 +31,7 @@ public sealed class BlexStatePersistor : IAsyncDisposable, IDisposable
     private bool _subscribed;
     private bool _suspended;
     private bool _watching;
+    private TaskCompletionSource? _hydration;
 
     /// <summary>Creates a persistor over a manager and storage sink.</summary>
     public BlexStatePersistor(BlexManager manager, IBlexStorage storage, BlexPersistenceOptions? options = null)
@@ -43,6 +44,75 @@ public sealed class BlexStatePersistor : IAsyncDisposable, IDisposable
     }
 
     private string KeyFor(IBlexStore store) => _options.KeyPrefix + store.Name;
+
+    /// <summary>
+    /// Whether <see cref="RehydrateAsync"/> has completed at least once, so the stores hold
+    /// whatever was persisted rather than their declared defaults (zustand's <c>hasHydrated</c>).
+    /// </summary>
+    /// <remarks>
+    /// The distinction matters whenever hydration is not instantaneous -- browser storage behind JS
+    /// interop, a deferred <see cref="BlexPersistenceOptions.SkipHydration"/> start, a Blazor Server
+    /// prerender. Until this turns <c>true</c>, a UI bound to a persisted store is rendering
+    /// defaults, not the user's data: show a skeleton rather than briefly flashing "0 items" at
+    /// someone whose cart is full.
+    /// </remarks>
+    public bool HasHydrated { get; private set; }
+
+    /// <summary>
+    /// Raised the first time hydration completes (and again after each later
+    /// <see cref="RehydrateAsync"/>), so a component can re-render once real state has landed.
+    /// Handler exceptions are isolated and reported through <see cref="BlexManager.OnError"/>.
+    /// </summary>
+    public event Action? Hydrated;
+
+    /// <summary>
+    /// A task that completes when hydration has finished -- already completed when
+    /// <see cref="HasHydrated"/> is <c>true</c>. The awaitable form of that flag, for code that
+    /// must not read a persisted store until it holds real data.
+    /// </summary>
+    /// <example><code>
+    /// await persistor.WhenHydratedAsync();
+    /// if (settings.Theme == "dark") ...
+    /// </code></example>
+    public Task WhenHydratedAsync()
+    {
+        if (HasHydrated)
+            return Task.CompletedTask;
+
+        lock (_saveGate)
+        {
+            if (HasHydrated)
+                return Task.CompletedTask;
+
+            _hydration ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            return _hydration.Task;
+        }
+    }
+
+    /// <summary>Marks hydration complete, releasing anything awaiting <see cref="WhenHydratedAsync"/>.</summary>
+    private void CompleteHydration()
+    {
+        HasHydrated = true;
+        ReleaseHydrationWaiters();
+        _manager.InvokeIsolated<object?>(Hydrated, null, "persistence", "hydrated handler");
+    }
+
+    /// <summary>
+    /// Completes any pending <see cref="WhenHydratedAsync"/> task. Also called on disposal: a
+    /// persistor torn down before it ever hydrated must not leave callers awaiting forever --
+    /// they can still read <see cref="HasHydrated"/> to see that it never happened.
+    /// </summary>
+    private void ReleaseHydrationWaiters()
+    {
+        TaskCompletionSource? waiters;
+        lock (_saveGate)
+        {
+            waiters = _hydration;
+            _hydration = null;
+        }
+
+        waiters?.TrySetResult();
+    }
 
     /// <summary>
     /// Loads and applies any previously persisted state for every persistent store, then starts
@@ -149,6 +219,7 @@ public sealed class BlexStatePersistor : IAsyncDisposable, IDisposable
                     }
                 }
 
+                slice = Merge(store, sb, slice);
                 if (slice is null)
                     continue;
 
@@ -257,6 +328,7 @@ public sealed class BlexStatePersistor : IAsyncDisposable, IDisposable
                     await TryRemoveAsync(store, cancellationToken).ConfigureAwait(false);
                 }
 
+                slice = Merge(store, sb, slice);
                 if (slice is null)
                 {
                     NotifyRehydrated(store.Name, null);
@@ -280,6 +352,33 @@ public sealed class BlexStatePersistor : IAsyncDisposable, IDisposable
         finally
         {
             _suspended = wasSuspended;
+        }
+
+        CompleteHydration();
+    }
+
+    /// <summary>
+    /// Runs <see cref="BlexPersistenceOptions.Merge"/> over a stored slice, or returns it unchanged
+    /// when no hook is configured. A throwing hook discards the payload: applying a half-merged
+    /// state would be worse than starting from the store's own defaults, and it is reported either
+    /// way.
+    /// </summary>
+    private JsonObject? Merge(IBlexStore store, BlexStoreBase instance, JsonObject? persisted)
+    {
+        if (persisted is null || _options.Merge is not { } merge)
+            return persisted;
+
+        try
+        {
+            var merged = merge(store.Name, persisted, instance.SerializeState());
+            // A hook that hands back a node still parented to something else (a sub-object of one
+            // of its arguments) cannot be re-parented; detach rather than throwing at the caller.
+            return merged is null || merged.Parent is null ? merged : (JsonObject)merged.DeepClone();
+        }
+        catch (Exception ex)
+        {
+            _manager.ReportError("persistence", ex, $"merging '{store.Name}'");
+            return null;
         }
     }
 
@@ -561,6 +660,8 @@ public sealed class BlexStatePersistor : IAsyncDisposable, IDisposable
 
     private void Unsubscribe()
     {
+        ReleaseHydrationWaiters();
+
         if (_watching && _storage is IBlexExternalStorageChange watchable)
         {
             watchable.ExternalChange -= OnExternalChange;

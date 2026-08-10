@@ -125,12 +125,15 @@
     private static readonly IReadOnlyList<ApiTable.Row> Core =
     [
         new("IBlexStore", "The store contract: <code>Name</code>, <code>Persist</code>, <code>StateChanged</code>, <code>SerializeState()</code>, <code>DeserializeState()</code>."),
-        new("BlexStoreBase", "Base class for every store. Change notification, batched dispatch, <code>Batch</code>, <code>ResetState</code>, <code>RestoreState</code> and the protected hooks the generator uses."),
+        new("BlexStoreBase", "Base class for every store. Change notification, batched dispatch, <code>Batch</code>, <code>ResetState</code>, <code>RestoreState</code>, <code>Dispose()</code> (cancels in-flight effects) and the protected hooks the generator uses."),
         new("BlexManager", "The central manager: store registry, middleware pipeline, action subscriptions, global state capture and restore, <code>ResetAll</code>, DevTools connection, error sink. See <a href=\"cross-store\">Cross-store coordination</a>."),
         new("BlexActionContext", "What observers receive after an action: <code>Store</code>, <code>ActionName</code>, <code>QualifiedName</code>, <code>Args</code>, <code>Sequence</code>, <code>Timestamp</code>, <code>GlobalState</code>."),
         new("BlexPreActionContext", "What middleware receives before an action, plus <code>IsCancelled</code> and <code>Cancel()</code>."),
+        new("BlexActionErrorContext", "What the error hooks receive when an action body throws: <code>Store</code>, <code>ActionName</code>, <code>QualifiedName</code>, <code>Args</code>, <code>Exception</code>, <code>Timestamp</code>. See <a href=\"middleware\">Middleware</a>."),
         new("BlexActionArg", "<code>readonly record struct (string Name, object? Value)</code> - one captured action argument."),
-        new("BlexOptions", "Configuration passed to <code>AddBlex</code>: <code>DevToolsName</code>, sanitizers, <code>RedactDevToolsKeys</code>, <code>UseMiddleware</code>, <code>UseFilter</code>, <code>OnError</code>."),
+        new("BlexOptions", "Configuration passed to <code>AddBlex</code>: <code>DevToolsName</code>, sanitizers, <code>RedactDevToolsKeys</code>, <code>UseMiddleware</code>, <code>UseFilter</code>, <code>OnError</code>, <code>OnActionError</code>."),
+        new("BlexComparers", "Collection equality for selector subscriptions: <code>Sequence&lt;T&gt;()</code> and <code>Set&lt;T&gt;()</code>. See <a href=\"subscriptions\">Components &amp; selectors</a>."),
+        new("BlexSelector&lt;T&gt;", "A lazy, memoized derived value over the whole state tree, created with <code>manager.CreateSelector(...)</code>: <code>Value</code>, <code>IsValid</code>, <code>Invalidate()</code>, <code>Dispose()</code>. See <a href=\"cross-store\">Cross-store coordination</a>."),
         new("BlexError", "<code>readonly record struct (string Source, Exception Exception, string? Detail)</code> - an isolated pipeline failure. See <a href=\"errors\">Error isolation</a>."),
         new("BlexJson", "The shared <code>JsonSerializerOptions</code> used by generated serialization."),
         new("IBlexDevTools", "The DevTools sink abstraction: <code>Init</code> and <code>Send</code>. See <a href=\"devtools\">DevTools</a>."),
@@ -138,28 +141,28 @@
 
     private static readonly IReadOnlyList<ApiTable.Row> MiddlewareTypes =
     [
-        new("IBlexMiddleware", "<code>OnAction(BlexActionContext)</code> and the defaulted <code>BeforeAction(BlexPreActionContext)</code>. See <a href=\"middleware\">Middleware</a>."),
+        new("IBlexMiddleware", "<code>OnAction(BlexActionContext)</code> plus the defaulted <code>BeforeAction(BlexPreActionContext)</code> and <code>OnActionError(BlexActionErrorContext)</code>. See <a href=\"middleware\">Middleware</a>."),
         new("BlexDelegateMiddleware", "Forwards each applied action to an <code>Action&lt;BlexActionContext&gt;</code>."),
         new("BlexFilterMiddleware", "Vetoes an action when the supplied predicate returns <code>false</code>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> Collections =
     [
-        new("BlexEntityState&lt;TEntity, TKey&gt;", "Immutable normalized state: <code>Ids</code>, <code>Entities</code>, <code>All</code>, <code>Count</code>, <code>Contains</code>, <code>Find</code>, <code>Empty</code>."),
-        new("BlexEntityAdapter&lt;TEntity, TKey&gt;", "CRUD over that state, with an optional sort comparer. See <a href=\"entities\">Entity adapter</a>."),
+        new("BlexEntityState&lt;TEntity, TKey&gt;", "Immutable normalized state: <code>Ids</code>, <code>Entities</code>, <code>All</code>, <code>Count</code>, <code>Contains</code>, <code>Find</code>, <code>TryGet</code>, <code>this[id]</code>, <code>Empty</code>."),
+        new("BlexEntityAdapter&lt;TEntity, TKey&gt;", "CRUD over that state, plus <code>SelectId</code> and <code>SortComparer</code>. See <a href=\"entities\">Entity adapter</a>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> PersistenceTypes =
     [
         new("IBlexStorage", "Async key/value sink: <code>GetAsync</code>, <code>SetAsync</code>, <code>RemoveAsync</code>."),
         new("IBlexExternalStorageChange", "Optional companion to <code>IBlexStorage</code>: reports keys written by another instance (another tab), enabling <code>SyncAcrossTabs</code>."),
-        new("BlexPersistenceOptions", "<code>KeyPrefix</code>, <code>DebounceInterval</code>, <code>DebounceMaxDelay</code>, <code>Version</code>, <code>Migrate</code>, <code>Partialize</code>, <code>OnRehydrated</code>, <code>SkipHydration</code>."),
-        new("BlexStatePersistor", "The coordinator: <code>StartAsync</code>, <code>FlushAsync</code>, <code>ClearAsync</code>, <code>DisposeAsync</code>. See <a href=\"persistence\">Persistence</a>."),
+        new("BlexPersistenceOptions", "<code>KeyPrefix</code>, <code>DebounceInterval</code>, <code>DebounceMaxDelay</code>, <code>Version</code>, <code>Migrate</code>, <code>Merge</code>, <code>Partialize</code>, <code>OnRehydrated</code>, <code>SkipHydration</code>, <code>SyncAcrossTabs</code>, <code>OnExternalChange</code>."),
+        new("BlexStatePersistor", "The coordinator: <code>StartAsync</code>, <code>RehydrateAsync</code>, <code>FlushAsync</code>, <code>ClearAsync</code>, <code>DisposeAsync</code>, plus <code>HasHydrated</code> / <code>Hydrated</code> / <code>WhenHydratedAsync()</code>. See <a href=\"persistence\">Persistence</a>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> HistoryTypes =
     [
-        new("BlexHistory", "In-app undo/redo over the global state tree, with an optional filter deciding which actions earn their own step. See <a href=\"history\">Undo &amp; redo</a>."),
+        new("BlexHistory", "In-app undo/redo over the global state tree: <code>Undo</code>/<code>Redo</code>, <code>Jump</code>/<code>JumpToPast</code>/<code>JumpToFuture</code>, <code>UndoLabels</code>/<code>RedoLabels</code>, <code>Checkpoint</code>, plus an optional <code>filter</code> and <code>groupBy</code>. See <a href=\"history\">Undo &amp; redo</a>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> Extensions =
@@ -182,10 +185,10 @@
     private static readonly IReadOnlyList<ApiTable.Row> TestingTypes =
     [
         new("BlexTestHarness&lt;TStore&gt;", "Store + manager + action log in one object."),
-        new("BlexTestHarness", "Static factory: <code>For&lt;TStore&gt;()</code> and <code>For(store)</code>."),
+        new("BlexTestHarness", "Static factory: <code>For&lt;TStore&gt;()</code>, <code>For(store)</code>, <code>WithMiddleware</code>, <code>WithFilter</code>."),
         new("BlexActionLog", "Records dispatches: <code>Actions</code>, <code>Last</code>, <code>Count</code>, <code>Names</code>, <code>QualifiedNames</code>, <code>Contains</code>, <code>CountOf</code>, <code>Clear</code>."),
         new("BlexRecordedAction", "One recorded dispatch with its store, names, sequence, state snapshot and args."),
-        new("BlexTestExtensions", "<code>RecordActions</code>, <code>Snapshot</code>, <code>WaitForAsync</code>, <code>CountNotifications</code>. See <a href=\"testing\">Testing</a>."),
+        new("BlexTestExtensions", "<code>RecordActions</code>, <code>Snapshot</code>, <code>store.WaitForAsync</code>, <code>manager.WaitForAsync</code>, <code>CountNotifications</code>. See <a href=\"testing\">Testing</a>."),
     ];
 
     private const string AttributeSummary = """
@@ -208,7 +211,8 @@
         DeserializeState  InvalidateComputed NotifyRestored   SetState
         SetEffectState    BeginEffect       EndEffect         Dispatch
         DispatchAsync     Batch             ResetState        RestoreState
-        IsRestoring       IsObserved
+        IsRestoring       IsObserved        BeginAction       DispatchApprovedAsync
+        Dispose           IsDisposed        CancelEffects
         """;
 
     private const string JsonShape = """

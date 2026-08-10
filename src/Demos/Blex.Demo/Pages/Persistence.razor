@@ -179,6 +179,49 @@
         </p>
     </Callout>
 
+    <h3>Knowing when the real state has landed</h3>
+    <p>
+        Hydration is not instantaneous: browser storage sits behind JS interop, a Blazor Server
+        prerender cannot reach it at all, and <code>SkipHydration</code> defers it on purpose. Until
+        it finishes, a component bound to a persisted store is rendering <em>declared defaults</em>,
+        not the user's data - which is how a full cart briefly renders as "0 items".
+        <code>HasHydrated</code> is the flag to branch on, <code>Hydrated</code> the event to
+        re-render from, and <code>WhenHydratedAsync()</code> the awaitable form.
+    </p>
+    <CodeBlock Code="@Hydration" Language="razor" />
+
+    <DemoCard Title="This page's own hydration state"
+              Description="Already true by the time you can read this - <BlexProvider> awaits StartAsync before the first interactive render. The interesting case is SkipHydration, or a slow storage provider."
+              Source="@HydrationSource" SourceLanguage="razor">
+        <div class="readout">
+            <div class="readout__item">
+                <span class="readout__label">HasHydrated</span>
+                <span class="readout__value readout__value--accent">@Persistor.HasHydrated</span>
+            </div>
+            <div class="readout__item">
+                <span class="readout__label">settings/Accent</span>
+                <span class="readout__value">@Settings.Accent</span>
+            </div>
+        </div>
+    </DemoCard>
+
+    <h3>Deciding how stored state meets live state</h3>
+    <p>
+        The default is already a shallow merge: the generated deserializer only writes the properties
+        the payload actually contains, so a key it omits keeps whatever the store currently holds.
+        <code>Merge</code> is for when that is not enough - a nested object that must be combined key
+        by key rather than replaced wholesale, or a value the <em>live</em> store must win on because
+        it was assigned before hydration finished.
+    </p>
+    <CodeBlock Code="@Merge" Title="Keeping a live value" Compact="true" />
+
+    <p>
+        It runs for cross-tab changes too, so both paths agree on what "applying stored state" means.
+        Return <code>null</code> to discard the payload and keep what the store already has; a hook
+        that throws does the same and reports through <code>OnError</code>, because applying a
+        half-merged state would be worse than starting from defaults.
+    </p>
+
     <h2>BlexStatePersistor</h2>
     <p>Resolve it from DI when you need to control persistence directly.</p>
     <ApiTable Rows="@PersistorRows" />
@@ -286,6 +329,7 @@
         new("bool SkipHydration", "Start saving without restoring. Call <code>RehydrateAsync()</code> to apply stored state later. Default <code>false</code>."),
         new("bool SyncAcrossTabs", "Apply state written by another tab as soon as it lands, instead of only at the next startup. Requires a storage implementing <code>IBlexExternalStorageChange</code> (the browser <code>localStorage</code> provider does). Default <code>false</code>."),
         new("Action&lt;string, JsonObject&gt;? OnExternalChange", "Called after another tab's state has been applied, with the store name and the applied slice."),
+        new("Func&lt;string, JsonObject, JsonObject, JsonObject?&gt;? Merge", "Combines a stored payload with the store's current state before it is applied. Receives the store name, the stored slice and a fresh snapshot of the live store; return what to apply, or <code>null</code> to discard. Runs for cross-tab changes too."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> PersistorRows =
@@ -295,6 +339,9 @@
         new("Task RehydrateAsync(CancellationToken)", "Applies stored state to every persistent store now. Pairs with <code>SkipHydration</code>; the restore itself is not an action, so it does not trigger a write back."),
         new("Task ClearAsync(CancellationToken)", "Removes every persistent store's saved slice from storage."),
         new("ValueTask DisposeAsync()", "Stops listening and flushes what is pending."),
+        new("bool HasHydrated", "Whether rehydration has completed at least once - i.e. whether the stores hold stored state or declared defaults."),
+        new("event Action? Hydrated", "Raised when hydration completes. Re-render from it to swap a skeleton for real data."),
+        new("Task WhenHydratedAsync()", "Completes once hydration has finished; already completed when <code>HasHydrated</code> is true. Released on disposal so a persistor torn down before it hydrated leaves nobody awaiting forever."),
     ];
 
     private const string OptIn = """
@@ -413,6 +460,57 @@
             else
                 _telemetry.Restored(state.Count); // came back with saved settings
         };
+        """;
+
+    private const string Hydration = """
+        @inject BlexStatePersistor Persistor
+        @inject CartStore Cart
+
+        @if (!Persistor.HasHydrated)
+        {
+            <CartSkeleton />        @* not "0 items" -- we do not know yet *@
+        }
+        else
+        {
+            <CartSummary Total="Cart.Total" />
+        }
+
+        @code {
+            protected override void OnInitialized() => Persistor.Hydrated += Rerender;
+
+            private void Rerender() => _ = InvokeAsync(StateHasChanged);
+
+            protected override void Dispose(bool disposing) => Persistor.Hydrated -= Rerender;
+        }
+        """;
+
+    private const string HydrationSource = """
+        @inject BlexStatePersistor Persistor
+
+        <p>HasHydrated: @Persistor.HasHydrated</p>
+
+        @code {
+            // Or await it, when the decision is not a render:
+            protected override async Task OnInitializedAsync()
+            {
+                await Persistor.WhenHydratedAsync();
+                _accent = Settings.Accent;   // guaranteed to be the stored value
+            }
+        }
+        """;
+
+    private const string Merge = """
+        builder.Services.AddBlexLocalStoragePersistence(options =>
+        {
+            options.Merge = (storeName, persisted, current) =>
+            {
+                // A connection id assigned during startup must survive rehydration.
+                if (storeName == "session")
+                    persisted["ConnectionId"] = current["ConnectionId"]?.DeepClone();
+
+                return persisted;   // or null to discard the payload entirely
+            };
+        });
         """;
 
     private const string SkipHydration = """

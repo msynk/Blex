@@ -28,6 +28,8 @@ public sealed class BlexManager
     private JsonObject? _committedState;
     private int _sequence;
     private bool _connected;
+    private bool _devToolsPaused;
+    private bool _changesLocked;
 
     /// <summary>Creates a manager with the supplied middleware (order preserved).</summary>
     public BlexManager(IEnumerable<IBlexMiddleware>? middleware = null)
@@ -66,6 +68,19 @@ public sealed class BlexManager
     /// Lets hot paths skip payload capture when nobody is listening.
     /// </summary>
     internal bool HasObservers => _middleware.Count > 0 || _connected || ActionDispatched is not null;
+
+    /// <summary>
+    /// Whether the Redux DevTools monitor is paused ("Pause recording"). Actions still apply and
+    /// still reach middleware and subscribers; they are simply not streamed to the extension.
+    /// </summary>
+    public bool IsDevToolsPaused => _devToolsPaused;
+
+    /// <summary>
+    /// Whether the Redux DevTools monitor has frozen the application ("Lock changes"). Every action
+    /// is vetoed while this is on, exactly as a <see cref="BlexOptions.UseFilter">filter</see>
+    /// returning <c>false</c> would -- time-travel restores still apply, which is the point.
+    /// </summary>
+    public bool AreChangesLocked => _changesLocked;
 
     /// <summary>Routes an isolated error to <see cref="OnError"/>, or <see cref="Console.Error"/> when unset.</summary>
     internal void ReportError(string source, Exception exception, string? detail = null)
@@ -217,6 +232,12 @@ public sealed class BlexManager
     /// callback exceptions are isolated and reported through <see cref="OnError"/>, like every other
     /// subscription; a throwing selector leaves the last known value in place so one bad read does
     /// not permanently wedge the subscription.
+    /// <para>
+    /// The projection is re-evaluated after state <em>restores</em> too (undo/redo, DevTools
+    /// time-travel, an incoming cross-tab change), not only after actions. Those paths change state
+    /// without dispatching anything, so a subscription that watched actions alone would keep
+    /// reporting a value the application no longer holds.
+    /// </para>
     /// </remarks>
     public IDisposable Subscribe<T>(
         Func<T> selector,
@@ -229,7 +250,7 @@ public sealed class BlexManager
         var equality = comparer ?? EqualityComparer<T>.Default;
         var last = selector();
 
-        var subscription = Subscribe(_ =>
+        void Evaluate()
         {
             var current = selector();
             if (equality.Equals(current, last))
@@ -238,6 +259,27 @@ public sealed class BlexManager
             var previous = last;
             last = current;
             onChanged(previous, current);
+        }
+
+        // The action path is already isolated by Subscribe; the restore path needs its own guard.
+        var actions = Subscribe(_ => Evaluate());
+        void OnRestored()
+        {
+            try
+            {
+                Evaluate();
+            }
+            catch (Exception ex)
+            {
+                ReportError("subscriber", ex, "selector after restore");
+            }
+        }
+
+        StateRestored += OnRestored;
+        var subscription = new BlexSubscription(() =>
+        {
+            StateRestored -= OnRestored;
+            actions.Dispose();
         });
 
         if (!fireImmediately)
@@ -271,6 +313,30 @@ public sealed class BlexManager
     {
         ArgumentNullException.ThrowIfNull(onChanged);
         return Subscribe<T>(selector, (_, current) => onChanged(current), comparer, fireImmediately);
+    }
+
+    /// <summary>
+    /// Creates a memoized derived value over the whole application state -- what
+    /// <c>[BlexComputedAttribute]</c> is to a single store, lifted to the manager. The projection
+    /// runs at most once per action, lazily, however many readers ask for it in between. Dispose the
+    /// returned selector to detach.
+    /// </summary>
+    /// <param name="selector">Projects the derived value. Runs on the reading thread.</param>
+    /// <remarks>
+    /// The counterpart to <see cref="Subscribe{T}(Func{T}, Action{T}, IEqualityComparer{T}, bool)"/>,
+    /// which pushes changes to one observer and evaluates eagerly after every action. Use this when
+    /// the value is <em>pulled</em> by several readers -- three components binding to the same
+    /// cross-store total then pay for one computation per action instead of three, and an action
+    /// none of them care about costs nothing.
+    /// </remarks>
+    /// <example><code>
+    /// using var overLimit = manager.CreateSelector(() => cart.Total > profile.CreditLimit);
+    /// if (overLimit.Value) ShowBanner();
+    /// </code></example>
+    public BlexSelector<T> CreateSelector<T>(Func<T> selector)
+    {
+        ArgumentNullException.ThrowIfNull(selector);
+        return new BlexSelector<T>(this, selector);
     }
 
     /// <summary>
@@ -419,14 +485,23 @@ public sealed class BlexManager
         _initialState ??= state;
         _committedState = state;
         _connected = true;
+        _devToolsPaused = false;
+        _changesLocked = false;
         devTools.Init(SanitizeState(state));
     }
 
     /// <summary>Detaches the DevTools sink (e.g. when the bridge is disposed).</summary>
+    /// <remarks>
+    /// Clears the monitor's pause/lock flags: a monitor closed (or a circuit torn down) while
+    /// "Lock changes" was on would otherwise leave the application permanently frozen with no
+    /// remaining way to unfreeze it.
+    /// </remarks>
     public void DisconnectDevTools()
     {
         _devTools = null;
         _connected = false;
+        _devToolsPaused = false;
+        _changesLocked = false;
     }
 
     /// <summary>Builds the global state tree: <c>{ "&lt;StoreName&gt;": &lt;state&gt;, ... }</c>.</summary>
@@ -463,6 +538,12 @@ public sealed class BlexManager
         // observed so their lazily-captured GlobalState reflects *their* state, not this one's.
         if (_inFlight.Count > 0)
             FreezeInFlightSnapshots();
+
+        // "Lock changes" in the DevTools monitor freezes the running application: every action is
+        // refused until it is unlocked. Restores are deliberately not gated, so the slider keeps
+        // working while the app is frozen -- which is the whole point of the button.
+        if (_changesLocked)
+            return false;
 
         if (_middleware.Count == 0)
             return true;
@@ -516,7 +597,7 @@ public sealed class BlexManager
             // DevTools must see this action before any subscriber reacts: a reactor that
             // dispatches a follow-up action re-enters RecordAction, and sending that first would
             // invert the extension's timeline (breaking time-travel ordering).
-            if (_connected && _devTools is not null)
+            if (_connected && !_devToolsPaused && _devTools is not null)
             {
                 var global = context.GlobalState;
                 _initialState ??= global;
@@ -529,6 +610,65 @@ public sealed class BlexManager
         {
             _inFlight.RemoveAt(_inFlight.Count - 1);
         }
+    }
+
+    /// <summary>
+    /// Raised when an action's body throws. The exception still propagates to the caller (an
+    /// effect's generated wrapper captures it into <c>XxxError</c>); this is the observation hook
+    /// for logging, telemetry and error reporting -- the counterpart to Pinia's <c>$onAction</c>
+    /// <c>onError</c> and Redux's error-reporting middleware.
+    /// </summary>
+    /// <remarks>
+    /// Cancellation is not a failure: an <see cref="OperationCanceledException"/> from an action
+    /// or effect does not raise this event. Handler exceptions are isolated and reported through
+    /// <see cref="OnError"/>.
+    /// </remarks>
+    public event Action<BlexActionErrorContext>? ActionFailed;
+
+    /// <summary>
+    /// Reports that an action body threw. Runs the middleware error hooks and raises
+    /// <see cref="ActionFailed"/>, both isolated: reporting a failure must never replace it with a
+    /// different one.
+    /// </summary>
+    // The exception most recently reported, so one failure travelling out through nested actions
+    // is reported once rather than once per frame. Held weakly: the reference exists only to
+    // compare against the next report, and keeping a strong one would pin an exception (and its
+    // whole captured stack) alive for the lifetime of the manager.
+    private readonly WeakReference<Exception> _lastReportedError = new(null!);
+
+    internal void RecordActionError(IBlexStore source, string actionName, IReadOnlyList<BlexActionArg>? args, Exception exception)
+    {
+        // A cancelled action (CancelXxx(), a superseded Latest run, a disposed store) is a normal
+        // outcome that the effect wrapper deliberately does not record as an error either.
+        if (exception is OperationCanceledException)
+            return;
+
+        // An action calling another action -- or an effect body calling one -- means the same
+        // exception passes through several dispatch frames on its way out. Report the innermost
+        // one, which names the action that actually threw, and let the outer frames re-throw
+        // silently. A reporter that fired once per frame would multiply every nested failure.
+        if (_lastReportedError.TryGetTarget(out var previous) && ReferenceEquals(previous, exception))
+            return;
+
+        _lastReportedError.SetTarget(exception);
+
+        if (_middleware.Count == 0 && ActionFailed is null)
+            return;
+
+        var context = new BlexActionErrorContext(source, actionName, args, exception);
+        foreach (var mw in _middleware)
+        {
+            try
+            {
+                mw.OnActionError(context);
+            }
+            catch (Exception ex)
+            {
+                ReportError("middleware", ex, context.QualifiedName);
+            }
+        }
+
+        InvokeIsolated(ActionFailed, context, "subscriber", context.QualifiedName);
     }
 
     private JsonObject? BuildDevToolsPayload(IReadOnlyList<BlexActionArg> args)
@@ -673,6 +813,17 @@ public sealed class BlexManager
                 _devTools?.Init(SanitizeState(_committedState));
                 break;
 
+            // "Pause recording" stops the monitor's timeline without freezing the app: actions keep
+            // applying and keep reaching middleware and subscribers, they are just not streamed.
+            case "PAUSE_RECORDING":
+                _devToolsPaused = AsBoolean(message["payload"]?["status"]) ?? !_devToolsPaused;
+                break;
+
+            // "Lock changes" freezes the application: every action is vetoed until it is unlocked.
+            case "LOCK_CHANGES":
+                _changesLocked = AsBoolean(message["payload"]?["status"]) ?? !_changesLocked;
+                break;
+
             case "IMPORT_STATE":
                 var computed = message["payload"]?["nextLiftedState"]?["computedStates"]?.AsArray();
                 var last = computed?.LastOrDefault();
@@ -688,6 +839,13 @@ public sealed class BlexManager
     /// </summary>
     private static string? AsString(JsonNode? node)
         => node is JsonValue value && value.TryGetValue<string>(out var s) ? s : null;
+
+    /// <summary>
+    /// Reads a node as a boolean without throwing when the extension sent a different JSON kind,
+    /// returning <c>null</c> when there is no usable value (the caller then toggles).
+    /// </summary>
+    private static bool? AsBoolean(JsonNode? node)
+        => node is JsonValue value && value.TryGetValue<bool>(out var b) ? b : null;
 
     private void ApplyStateString(string? stateJson)
     {

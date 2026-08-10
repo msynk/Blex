@@ -235,6 +235,8 @@
         new("int Count", "Number of stored entities. <code>[JsonIgnore]</code>."),
         new("bool Contains(TKey)", "Whether an entity with that id exists."),
         new("TEntity? Find(TKey)", "The entity for an id, or <code>default</code>."),
+        new("TEntity this[TKey]", "The entity with that id, throwing <code>KeyNotFoundException</code> when there is none - for the lookups where absence is a bug, not a case."),
+        new("bool TryGet(TKey, out TEntity)", "Looks an entity up and reports whether it was there. Use it over <code>Find</code> for struct entities, where <code>default</code> is a legitimate value - and to avoid hashing the key twice with <code>Contains</code> + <code>Find</code>."),
         new("static BlexEntityState&lt;TEntity, TKey&gt; Empty", "A shared, read-only empty state."),
     ];
 
@@ -255,6 +257,8 @@
         new("RemoveMany(state, ids)", "Removes the listed entities."),
         new("RemoveAll(state)", "Removes everything."),
         new("SetAll(state, entities)", "Replaces the whole collection."),
+        new("SelectId(entity)", "The id, as this adapter derives it. Use it instead of repeating the key expression at each call site, where a second copy can silently diverge."),
+        new("IComparer&lt;TEntity&gt;? SortComparer", "The comparer keeping <code>Ids</code> ordered, or <code>null</code> for insertion order."),
     ];
 
     private const string Shape = """

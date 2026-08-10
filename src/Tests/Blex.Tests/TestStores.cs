@@ -182,8 +182,8 @@ public partial class EffectConcurrencyStore
     public int DebouncedBodyRuns { get; private set; }
 
     // Short enough to keep tests quick, long enough that a burst dispatched in one go cannot
-    // straddle it.
-    [BlexEffectAttribute(DebounceMilliseconds = 40)]
+    // straddle it even on a loaded CI runner. Keep in sync with EffectDebounceTests.Quiet.
+    [BlexEffectAttribute(DebounceMilliseconds = 250)]
     private async Task OnTypeAhead(string query)
     {
         DebouncedBodyRuns++;
@@ -194,7 +194,7 @@ public partial class EffectConcurrencyStore
 
     // Debounce gates the burst; Latest cancels a request that is already in flight when the next
     // one gets through.
-    [BlexEffectAttribute(DebounceMilliseconds = 40, Concurrency = BlexEffectConcurrency.Latest)]
+    [BlexEffectAttribute(DebounceMilliseconds = 250, Concurrency = BlexEffectConcurrency.Latest)]
     private async Task OnLiveSearch(string query, CancellationToken ct)
     {
         DebouncedBodyRuns++;
@@ -203,7 +203,7 @@ public partial class EffectConcurrencyStore
         Completed++;
     }
 
-    [BlexEffectAttribute(DebounceMilliseconds = 40)]
+    [BlexEffectAttribute(DebounceMilliseconds = 250)]
     private async Task OnDebouncedBoom()
     {
         DebouncedBodyRuns++;
@@ -235,6 +235,66 @@ public partial class GatedStore
     {
         await Task.Yield();
         Count += 10;
+    }
+
+    /// <summary>A plain synchronous action, for dispatching one while <c>Slow</c> is still awaiting.</summary>
+    [BlexActionAttribute]
+    private void OnBump() => Count += 100;
+}
+
+/// <summary>Actions and effects that fail on demand, for the action-error hooks.</summary>
+[BlexStoreAttribute(Name = "failing")]
+public partial class FailingStore
+{
+    [BlexStateAttribute] private int _value;
+
+    public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    [BlexActionAttribute]
+    private void OnBoom() => throw new InvalidOperationException("sync-boom");
+
+    [BlexActionAttribute]
+    private async Task OnBoomAsync()
+    {
+        await Task.Yield();
+        throw new InvalidOperationException("async-boom");
+    }
+
+    [BlexActionAttribute]
+    private void OnSet(int value) => Value = value;
+
+    /// <summary>An action that calls another action which throws: one failure, several frames.</summary>
+    [BlexActionAttribute]
+    private void OnOuter() => Boom();
+
+    /// <summary>An effect whose body calls a synchronous action that throws.</summary>
+    [BlexEffectAttribute]
+    private async Task OnOuterEffect()
+    {
+        await Task.Yield();
+        Boom();
+    }
+
+    [BlexEffectAttribute]
+    private async Task OnLoad(string key)
+    {
+        await Task.Yield();
+        throw new InvalidOperationException("effect-boom: " + key);
+    }
+
+    /// <summary>Parks until the gate opens or the effect's own token is cancelled.</summary>
+    [BlexEffectAttribute]
+    private async Task OnWatch(CancellationToken ct)
+    {
+        await Gate.Task.WaitAsync(ct);
+        Value = 1;
+    }
+
+    [BlexEffectAttribute(DebounceMilliseconds = 10_000)]
+    private async Task OnSlowDebounce()
+    {
+        await Task.Yield();
+        Value = 2;
     }
 }
 

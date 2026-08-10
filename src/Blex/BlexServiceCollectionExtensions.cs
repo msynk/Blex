@@ -34,19 +34,47 @@ public static class BlexServiceCollectionExtensions
         services.AddSingleton(options);
 
         foreach (var type in options.MiddlewareTypes)
-            services.Add(new ServiceDescriptor(typeof(IBlexMiddleware), type, lifetime));
+        {
+            // Registered concretely, with the IBlexMiddleware registration forwarding to it, so
+            // resolving either way inside one scope yields the same instance.
+            services.Add(new ServiceDescriptor(type, type, lifetime));
+            services.Add(new ServiceDescriptor(typeof(IBlexMiddleware), sp => sp.GetRequiredService(type), lifetime));
+        }
 
         services.Add(new ServiceDescriptor(typeof(BlexManager), sp =>
         {
             var opts = sp.GetRequiredService<BlexOptions>();
-            var resolved = sp.GetServices<IBlexMiddleware>().ToList();
-            resolved.AddRange(opts.MiddlewareInstances);
-            return new BlexManager(resolved)
+
+            // Registration order, exactly as written: order decides which veto is consulted first
+            // and what a logger sees.
+            var resolved = new List<IBlexMiddleware>(opts.MiddlewareEntries.Count);
+            foreach (var entry in opts.MiddlewareEntries)
+            {
+                resolved.Add(entry is Type type
+                    ? (IBlexMiddleware)sp.GetRequiredService(type)
+                    : (IBlexMiddleware)entry);
+            }
+
+            // Middleware registered straight into the service collection (not through the options)
+            // still participates -- appended, and de-duplicated against what is already resolved,
+            // since the IBlexMiddleware registrations above forward to those same instances.
+            foreach (var extra in sp.GetServices<IBlexMiddleware>())
+            {
+                if (!resolved.Contains(extra))
+                    resolved.Add(extra);
+            }
+
+            var manager = new BlexManager(resolved)
             {
                 DevToolsStateSanitizer = opts.DevToolsStateSanitizer,
                 DevToolsActionSanitizer = opts.DevToolsActionSanitizer,
                 OnError = opts.OnError,
             };
+
+            if (opts.OnActionError is { } onActionError)
+                manager.ActionFailed += onActionError;
+
+            return manager;
         }, lifetime));
 
         return services;
@@ -119,18 +147,23 @@ public static class BlexServiceCollectionExtensions
     /// </param>
     /// <param name="filter">
     /// Optional predicate deciding which actions become their own undo step. See
-    /// <see cref="BlexHistory(BlexManager, int, Func{BlexActionContext, bool})"/>.
+    /// <see cref="BlexHistory(BlexManager, int, Func{BlexActionContext, bool}, Func{BlexActionContext, string})"/>.
+    /// </param>
+    /// <param name="groupBy">
+    /// Optional key selector that merges consecutive actions into a single undo step (redux-undo's
+    /// <c>groupBy</c>).
     /// </param>
     public static IServiceCollection AddBlexHistory(
         this IServiceCollection services,
         int maxEntries = 100,
         ServiceLifetime lifetime = ServiceLifetime.Scoped,
-        Func<BlexActionContext, bool>? filter = null)
+        Func<BlexActionContext, bool>? filter = null,
+        Func<BlexActionContext, string?>? groupBy = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.Add(new ServiceDescriptor(
             typeof(BlexHistory),
-            sp => new BlexHistory(sp.GetRequiredService<BlexManager>(), maxEntries, filter),
+            sp => new BlexHistory(sp.GetRequiredService<BlexManager>(), maxEntries, filter, groupBy),
             lifetime));
         return services;
     }

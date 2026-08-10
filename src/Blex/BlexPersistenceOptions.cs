@@ -57,6 +57,30 @@ public sealed class BlexPersistenceOptions
     public Func<string, JsonObject, JsonObject?>? Partialize { get; set; }
 
     /// <summary>
+    /// Combines a stored payload with the store's current state before it is applied (zustand's
+    /// <c>merge</c>). Receives the store name, the stored slice and a fresh snapshot of the live
+    /// store; return the state to apply, or <c>null</c> to discard the payload and keep what the
+    /// store already holds.
+    /// </summary>
+    /// <remarks>
+    /// The default without this hook is already a shallow merge -- keys the payload omits keep
+    /// their current values, because the generated deserializer only writes the properties actually
+    /// present. Supply this when that is not enough: a nested object that must be merged key by key
+    /// rather than replaced wholesale, a stored list that should be unioned with defaults, or a
+    /// value the live store must win on (a session id assigned before hydration finished). Runs for
+    /// cross-tab changes too, so both paths agree on what "applying stored state" means. Mutating
+    /// either argument is safe; both are freshly built for this call.
+    /// </remarks>
+    /// <example><code>
+    /// options.Merge = (store, persisted, current) =>
+    /// {
+    ///     if (store == "session") persisted["ConnectionId"] = current["ConnectionId"]?.DeepClone();
+    ///     return persisted;
+    /// };
+    /// </code></example>
+    public Func<string, JsonObject, JsonObject, JsonObject?>? Merge { get; set; }
+
+    /// <summary>
     /// Invoked once per persistent store after rehydration, with the state that was applied, or
     /// <c>null</c> when there was nothing stored (or the payload was discarded). The counterpart to
     /// zustand's <c>onRehydrateStorage</c>; handy for logging or for kicking off a refresh once the

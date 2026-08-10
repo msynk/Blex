@@ -30,8 +30,18 @@ public static class BlexJson
     /// are unaffected, which is why it belongs in startup rather than mid-flight. Types that carry
     /// a <c>[JsonConverter]</c> attribute need no registration at all.
     /// </remarks>
+    /// <para>
+    /// This is also the trimming/AOT seam. Snapshots go through the reflection-based serializer by
+    /// default, which a trimmed publish (the Blazor WebAssembly release default) can strip the
+    /// metadata for. Point <see cref="JsonSerializerOptions.TypeInfoResolver"/> at a
+    /// <c>JsonSerializerContext</c> covering your state types and every generated
+    /// <c>SerializeState</c>/<c>DeserializeState</c> uses it instead.
+    /// </para>
     /// <example><code>
     /// BlexJson.Configure(o => o.Converters.Add(new MoneyJsonConverter()));
+    ///
+    /// // Trimmed / AOT publishes:
+    /// BlexJson.Configure(o => o.TypeInfoResolver = AppJsonContext.Default);
     /// </code></example>
     public static void Configure(Action<JsonSerializerOptions> configure)
     {

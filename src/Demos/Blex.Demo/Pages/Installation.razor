@@ -70,6 +70,25 @@
 
     <CodeBlock Code="@HeadlessSample" Title="Headless host" />
 
+    <h2>Trimming and AOT</h2>
+    <p>
+        Snapshots - <code>SerializeState</code>, persistence, the DevTools payload - go through
+        <code>System.Text.Json</code>. By default that is the reflection-based serializer, whose
+        metadata a trimmed publish (the Blazor WebAssembly release default) is free to strip for
+        types it cannot see being used. Point the shared options at a source-generated context and
+        every generated snapshot uses it instead.
+    </p>
+    <CodeBlock Code="@AotSample" FileName="Program.cs" />
+
+    <Callout Kind="Callout.CalloutKind.Tip" Title="Register the state types, not the stores">
+        <p style="margin-bottom:0">
+            A store class is never serialized - only the value of each <code>[BlexState]</code>
+            field, one property at a time. So the context needs <code>CartLine</code> and
+            <code>BlexEntityState&lt;Todo, int&gt;</code>, not <code>CartStore</code>. A store whose
+            state is all primitives and strings needs nothing at all.
+        </p>
+    </Callout>
+
     <h2>Requirements</h2>
     <ul>
         <li><strong>.NET 10</strong> for <code>Blex</code>, <code>Blex.Blazor</code> and <code>Blex.Testing</code>.</li>
@@ -146,6 +165,16 @@
                 </NotFound>
             </Router>
         </BlexProvider>
+        """;
+
+    private const string AotSample = """
+        [JsonSerializable(typeof(CartLine))]
+        [JsonSerializable(typeof(BlexEntityState<Todo, int>))]
+        internal partial class AppJsonContext : JsonSerializerContext;
+
+        // Before any store is resolved or snapshotted -- the options instance becomes
+        // read-only on first use, so this belongs in startup.
+        BlexJson.Configure(o => o.TypeInfoResolver = AppJsonContext.Default);
         """;
 
     private const string HeadlessSample = """

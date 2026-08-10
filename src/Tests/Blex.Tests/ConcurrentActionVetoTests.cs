@@ -95,6 +95,49 @@ public class ConcurrentActionVetoTests
     }
 
     [Fact]
+    public async Task VetoApplies_ToASynchronousActionStartedWhileAnAsyncOneIsInFlight()
+    {
+        // Gating the veto on the record depth (rather than the synchronous nesting depth) let a
+        // plain sync action slip past every filter for as long as any effect was awaiting.
+        var seen = new List<string>();
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx =>
+        {
+            seen.Add(ctx.ActionName);
+            return ctx.ActionName != "Bump";
+        })]);
+
+        var store = new GatedStore();
+        manager.Register(store);
+
+        var slow = store.Slow();   // parks on the gate
+        store.Bump();              // synchronous, dispatched mid-await
+
+        store.Gate.SetResult();
+        await slow;
+
+        Assert.Contains("Bump", seen);   // the filter was consulted...
+        Assert.Equal(1, store.Count);    // ...and vetoed it (100 was not added)
+    }
+
+    [Fact]
+    public async Task SyncActionStartedWhileAnAsyncOneIsInFlight_IsOfferedToTheFilter()
+    {
+        var seen = new List<string>();
+        var manager = new BlexManager([new BlexFilterMiddleware(ctx => { seen.Add(ctx.ActionName); return true; })]);
+
+        var store = new GatedStore();
+        manager.Register(store);
+
+        var slow = store.Slow();
+        store.Bump();
+        store.Gate.SetResult();
+        await slow;
+
+        Assert.Equal(new[] { "Slow", "Bump" }, seen);
+        Assert.Equal(101, store.Count);
+    }
+
+    [Fact]
     public void SyncActionsNestedInsideABatch_AreVetoedOnlyOnce()
     {
         // The outer batch owns the veto decision; its nested sync mutations must not re-enter it.

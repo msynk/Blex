@@ -40,6 +40,7 @@ public sealed class BlexGenerator : IIncrementalGenerator
         "BeginEffect", "EndEffect", "Dispatch", "DispatchAsync",
         "BeginAction", "DispatchApprovedAsync",
         "Batch", "ResetState", "RestoreState", "IsRestoring", "IsObserved",
+        "Dispose", "IsDisposed", "CancelEffects",
     ];
 
     private static readonly DiagnosticDescriptor NotPartial = new(
@@ -1085,6 +1086,28 @@ public sealed class BlexGenerator : IIncrementalGenerator
 
             sb.AppendLine($"{body}        EndEffect(ref {pendingField});");
             sb.AppendLine($"{body}    }}");
+            sb.AppendLine($"{body}}}");
+            sb.AppendLine();
+        }
+
+        // Cancellation on disposal. Only the sources are cancelled, never disposed: the frame that
+        // created one owns it and disposes it in its own finally, and disposing it from here would
+        // race that frame's `catch (OperationCanceledException) when (ct.IsCancellationRequested)`.
+        var cancellable = m.Effects.Where(e => e.HasCancellationToken || e.DebounceMilliseconds > 0).ToList();
+        if (cancellable.Count > 0)
+        {
+            sb.AppendLine($"{body}/// <inheritdoc />");
+            sb.AppendLine($"{body}protected override void CancelEffects()");
+            sb.AppendLine($"{body}{{");
+            foreach (var e in cancellable)
+            {
+                if (e.HasCancellationToken)
+                    sb.AppendLine($"{body}    __{e.WrapperName}Cts?.Cancel();");
+                if (e.DebounceMilliseconds > 0)
+                    sb.AppendLine($"{body}    __{e.WrapperName}Debounce?.Cancel();");
+            }
+
+            sb.AppendLine($"{body}    base.CancelEffects();");
             sb.AppendLine($"{body}}}");
             sb.AppendLine();
         }

@@ -16,7 +16,7 @@ namespace Blex;
 /// recorded as its own action. Avoid mutating a store from outside while one of its async
 /// actions is in progress.
 /// </remarks>
-public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
+public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged, IDisposable
 {
     // XAML binding engines (MAUI, WPF, WinUI) treat an empty property name as "every property
     // changed". That is the honest granularity here: memoized computed properties can change
@@ -26,6 +26,7 @@ public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
     private int _recordDepth;
     private int _notifyDepth;
     private bool _dirty;
+    private bool _disposed;
     private BlexManager? _manager;
     private JsonObject? _initialState;
 
@@ -166,6 +167,11 @@ public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
         if (EqualityComparer<T>.Default.Equals(field, value))
             return;
 
+        // A record depth above zero means an action of this store is running -- either lexically
+        // around this assignment or still awaiting -- and the assignment belongs to it. Unlike a
+        // named action (see BeginAction), a raw property write carries no way to tell "the action's
+        // own body" from "somebody else mutating mid-await", so it is always attributed to the
+        // action in flight rather than re-offered to the filters as a separate "Set X".
         if (_recordDepth == 0 && _manager is { HasObservers: true } manager)
         {
             // A standalone set is its own action; give middleware a chance to veto it before
@@ -260,7 +266,11 @@ public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
     protected void Dispatch(string actionName, Action mutation, BlexActionArg[]? args)
     {
         ArgumentNullException.ThrowIfNull(mutation);
-        if (_recordDepth == 0 && _manager is not null && !_manager.BeforeAction(this, actionName, args))
+
+        // Gate the veto on the *synchronous* nesting depth, not the record depth -- see the remarks
+        // on BeginAction. A sync action started while an async action of this store is still
+        // awaiting must still face the filters.
+        if (!BeginAction(actionName, args))
             return;
 
         _recordDepth++;
@@ -268,6 +278,11 @@ public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
         try
         {
             mutation();
+        }
+        catch (Exception ex)
+        {
+            _manager?.RecordActionError(this, actionName, args, ex);
+            throw;
         }
         finally
         {
@@ -364,9 +379,11 @@ public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
     /// <summary>
     /// Runs the before-action pipeline for an action that is about to start and reports whether it
     /// may proceed (<c>false</c> means a middleware vetoed it). Call this <em>before</em> touching
-    /// any observable state, then run the body through <see cref="DispatchApprovedAsync"/> so the
-    /// decision is taken exactly once. Generated effect wrappers use this so a vetoed effect leaves
-    /// no trace at all -- no loading flicker, no cleared error, no cancelled predecessor.
+    /// any observable state; an asynchronous body then runs through
+    /// <see cref="DispatchApprovedAsync"/> so the decision is taken exactly once, and
+    /// <see cref="Dispatch(string, Action, BlexActionArg[])"/> consults it itself. Generated effect
+    /// wrappers use it so a vetoed effect leaves no trace at all -- no loading flicker, no cleared
+    /// error, no cancelled predecessor.
     /// </summary>
     protected bool BeginAction(string actionName, BlexActionArg[]? args)
     {
@@ -394,6 +411,11 @@ public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
         try
         {
             await mutation().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _manager?.RecordActionError(this, actionName, args, ex);
+            throw;
         }
         finally
         {
@@ -436,5 +458,57 @@ public abstract class BlexStoreBase : IBlexStore, INotifyPropertyChanged
 
         InvalidateComputed();
         NotifyStateChanged();
+    }
+
+    /// <summary>Whether <see cref="Dispose()"/> has run on this store.</summary>
+    protected bool IsDisposed => _disposed;
+
+    /// <summary>
+    /// Cancels every in-flight <c>[BlexEffectAttribute]</c> run (and any effect still waiting out
+    /// its debounce interval). Overridden by the generator; the base implementation does nothing.
+    /// </summary>
+    protected virtual void CancelEffects()
+    {
+    }
+
+    /// <summary>
+    /// Releases the store: in-flight effects are cancelled so their continuations do not resume
+    /// against a torn-down scope, and pending debounce timers are stopped.
+    /// </summary>
+    /// <remarks>
+    /// A DI container disposes the stores it created (a Blazor Server circuit ending, a test scope
+    /// closing), so this is what stops an effect started moments before teardown from carrying on
+    /// against a dead renderer. Cancellation through the effect's own token is a normal outcome, so
+    /// a cancelled run records no error. The store stays usable and attached: disposal is a
+    /// best-effort quiesce, not a hard kill, and calling it twice is a no-op.
+    /// </remarks>
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Override to release additional resources. The base implementation cancels in-flight effects.
+    /// </summary>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed || !disposing)
+            return;
+
+        _disposed = true;
+        try
+        {
+            CancelEffects();
+        }
+        catch (Exception ex)
+        {
+            // Disposal runs during container teardown; a throwing cancellation must not take the
+            // rest of the scope's disposal down with it.
+            if (_manager is { } manager)
+                manager.ReportError("dispose", ex, Name);
+            else
+                Console.Error.WriteLine($"[Blex] dispose failed ({Name}): {ex.Message}");
+        }
     }
 }

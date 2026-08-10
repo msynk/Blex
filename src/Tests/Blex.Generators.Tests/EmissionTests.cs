@@ -330,4 +330,50 @@ public class EmissionTests
         Assert.Contains("DispatchApprovedAsync(", wrapper);
         Assert.DoesNotContain("await DispatchAsync(", wrapper);
     }
+
+    [Fact]
+    public void CancellableEffects_AreCancelledOnDisposal()
+    {
+        var result = GeneratorTestHelper.Run(Usings + """
+            namespace App;
+
+            [BlexStoreAttribute] public partial class S
+            {
+                [BlexEffectAttribute]
+                private async Task OnLoad(CancellationToken ct) => await Task.Delay(1, ct);
+
+                [BlexEffectAttribute(DebounceMilliseconds = 250)]
+                private async Task OnSearch(string q) => await Task.Yield();
+            }
+            """);
+
+        Assert.Empty(result.CompileErrors());
+        var generated = result.SingleGenerated;
+
+        Assert.Contains("protected override void CancelEffects()", generated);
+        Assert.Contains("__LoadCts?.Cancel();", generated);
+        Assert.Contains("__SearchDebounce?.Cancel();", generated);
+
+        // The sources are owned by the frame that created them and disposed in its own finally;
+        // disposing them from here would race that frame's cancellation catch.
+        var start = generated.IndexOf("protected override void CancelEffects()", StringComparison.Ordinal);
+        var body = generated.Substring(start, generated.IndexOf("}", generated.IndexOf("base.CancelEffects();", StringComparison.Ordinal), StringComparison.Ordinal) - start);
+        Assert.DoesNotContain(".Dispose()", body);
+    }
+
+    [Fact]
+    public void AStoreWithNothingToCancel_EmitsNoCancelOverride()
+    {
+        var result = GeneratorTestHelper.Run(Usings + """
+            namespace App;
+            [BlexStoreAttribute] public partial class S
+            {
+                [BlexStateAttribute] private int _count;
+                [BlexEffectAttribute] private async Task OnLoad() => await Task.Yield();
+            }
+            """);
+
+        Assert.Empty(result.CompileErrors());
+        Assert.DoesNotContain("CancelEffects", result.SingleGenerated);
+    }
 }

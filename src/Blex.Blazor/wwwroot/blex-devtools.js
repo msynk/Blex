@@ -20,9 +20,13 @@ export function connect(dotNetRef, name) {
 
     const connection = ext.connect({
         name: name || "Blex",
-        // Only advertise what the .NET side actually implements.
+        // Only advertise what the .NET side actually implements: the extension allows exactly the
+        // features listed as true and hides the rest, so a button left false here can never send
+        // its message. `skip`/`reorder`/`dispatch`/`test` need the extension's lifted action log,
+        // which Blex does not keep - it streams state, it does not replay reducers.
         features: {
-            pause: false,
+            pause: true,
+            lock: true,
             export: true,
             import: "custom",
             jump: true,

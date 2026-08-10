@@ -31,6 +31,20 @@ public sealed class BlexEntityAdapter<TEntity, TKey>
         _sortComparer = sortComparer;
     }
 
+    /// <summary>
+    /// The id of an entity, as this adapter derives it. Exposed (like Redux Toolkit's
+    /// <c>adapter.selectId</c>) so callers can key entities the same way the adapter does without
+    /// duplicating the selector -- the difference between <c>Adapter.SelectId(todo)</c> and a
+    /// second, silently divergent <c>t =&gt; t.Id</c> at every call site.
+    /// </summary>
+    public TKey SelectId(TEntity entity) => _selectId(entity);
+
+    /// <summary>
+    /// The comparer keeping <see cref="BlexEntityState{TEntity, TKey}.Ids"/> ordered, or
+    /// <c>null</c> when the adapter preserves insertion order.
+    /// </summary>
+    public IComparer<TEntity>? SortComparer => _sortComparer;
+
     /// <summary>Builds the resulting state, re-sorting ids when a sort comparer is configured.</summary>
     private BlexEntityState<TEntity, TKey> Build(List<TKey> ids, Dictionary<TKey, TEntity> map)
     {

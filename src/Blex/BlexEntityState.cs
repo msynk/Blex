@@ -141,9 +141,26 @@ public sealed class BlexEntityState<TEntity, TKey>
         }
     }
 
+    /// <summary>The entity with the given id.</summary>
+    /// <exception cref="KeyNotFoundException">No entity has that id.</exception>
+    /// <remarks>
+    /// For the cases where absence is expected, use <see cref="TryGet"/> or <see cref="Find"/>.
+    /// </remarks>
+    public TEntity this[TKey id] => Entities[id];
+
     /// <summary>Whether an entity with the given id exists.</summary>
     public bool Contains(TKey id) => Entities.ContainsKey(id);
 
     /// <summary>Returns the entity for an id, or <c>default</c> if absent.</summary>
     public TEntity? Find(TKey id) => Entities.TryGetValue(id, out var e) ? e : default;
+
+    /// <summary>
+    /// Looks an entity up by id, reporting whether it was there.
+    /// </summary>
+    /// <remarks>
+    /// The unambiguous counterpart to <see cref="Find"/>: for a struct entity (or any type whose
+    /// default is a legitimate value) <c>Find</c> cannot distinguish "absent" from "present and
+    /// equal to default", and <c>Contains</c> followed by <c>Find</c> hashes the key twice.
+    /// </remarks>
+    public bool TryGet(TKey id, out TEntity entity) => Entities.TryGetValue(id, out entity!);
 }

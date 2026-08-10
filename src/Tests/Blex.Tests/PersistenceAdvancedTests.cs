@@ -145,7 +145,10 @@ public class PersistenceAdvancedTests
         var (store, manager, storage) = Setup();
         var writes = 0;
         var counting = new CountingStorage(storage, () => writes++);
-        var options = new BlexPersistenceOptions { DebounceInterval = TimeSpan.FromMilliseconds(50) };
+        // Long enough that the timer cannot fire on its own between the burst and the assertion
+        // below - FlushAsync is what drives the write here, so the interval's length is irrelevant
+        // to what this test covers, and a short one would only make it flake on a loaded runner.
+        var options = new BlexPersistenceOptions { DebounceInterval = TimeSpan.FromMinutes(5) };
 
         await using var persistor = new BlexStatePersistor(manager, counting, options);
         await persistor.StartAsync();

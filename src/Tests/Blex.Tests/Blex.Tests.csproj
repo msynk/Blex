@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Blex\Blex.csproj" />
+    <ProjectReference Include="..\..\Blex.Blazor\Blex.Blazor.csproj" />
     <ProjectReference Include="..\..\Blex.Maui\Blex.Maui.csproj" />
     <ProjectReference Include="..\..\Blex.Testing\Blex.Testing.csproj" />
     <ProjectReference Include="..\..\Blex.Generators\Blex.Generators.csproj"

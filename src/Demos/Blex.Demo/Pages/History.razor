@@ -70,6 +70,111 @@
         </p>
     </DemoCard>
 
+    <h2>Jumping several steps at once</h2>
+    <p>
+        <code>Undo()</code> and <code>Redo()</code> are the one-step cases of <code>Jump(n)</code>:
+        negative walks back, positive walks forward. The intermediate states are never applied - the
+        stacks are walked first and only the destination is restored, so a ten-step undo costs one
+        render, one storage write and one <code>Changed</code> raise instead of ten of each.
+    </p>
+    <p>
+        <code>UndoLabels</code> and <code>RedoLabels</code> name the steps in navigation order, which
+        is what a history panel renders; <code>JumpToPast</code> / <code>JumpToFuture</code> address
+        them the way redux-undo does.
+    </p>
+    <CodeBlock Code="@JumpApi" />
+
+    <DemoCard Title="A history panel"
+              Description="Pick any point on either stack and land on it directly. Make a few changes below first, then step back through them."
+              Source="@JumpSource" SourceLanguage="razor">
+        <div class="row">
+            <button class="btn btn-sm" @onclick="Counter.Increment">Increment counter</button>
+            <button class="btn btn-sm" @onclick="AddContact">Add a contact</button>
+            <button class="btn btn-sm btn-ghost" @onclick="HistoryStack.Clear">Clear history</button>
+        </div>
+
+        <div class="grid grid--2" style="margin-top:0.9rem">
+            <div class="card">
+                <p class="card__title">Undo stack <span class="card__num">@HistoryStack.UndoCount</span></p>
+                @if (HistoryStack.UndoCount == 0)
+                {
+                    <p class="small muted" style="margin-bottom:0">Nothing to undo yet.</p>
+                }
+                else
+                {
+                    <div class="row">
+                        @for (var i = 0; i < HistoryStack.UndoLabels.Count; i++)
+                        {
+                            var steps = i + 1;
+                            var label = HistoryStack.UndoLabels[i];
+                            <button class="btn btn-sm" @onclick="() => HistoryStack.Jump(-steps)">
+                                ↶ @label <span class="muted">(@steps)</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="card">
+                <p class="card__title">Redo stack <span class="card__num">@HistoryStack.RedoCount</span></p>
+                @if (HistoryStack.RedoCount == 0)
+                {
+                    <p class="small muted" style="margin-bottom:0">Nothing to redo yet.</p>
+                }
+                else
+                {
+                    <div class="row">
+                        @for (var i = 0; i < HistoryStack.RedoLabels.Count; i++)
+                        {
+                            var index = i;
+                            var label = HistoryStack.RedoLabels[i];
+                            <button class="btn btn-sm" @onclick="() => HistoryStack.JumpToFuture(index)">
+                                ↷ @label <span class="muted">(@(index + 1))</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="readout" style="margin-top:0.9rem">
+            <div class="readout__item">
+                <span class="readout__label">counter/Count</span>
+                <span class="readout__value readout__value--accent">@Counter.Count</span>
+            </div>
+            <div class="readout__item">
+                <span class="readout__label">contacts</span>
+                <span class="readout__value">@Contacts.Total</span>
+            </div>
+        </div>
+    </DemoCard>
+
+    <h2>Grouping keystrokes into one step</h2>
+    <p>
+        A filter removes an action from the stack entirely. <em>Grouping</em> keeps it but folds it
+        into the step already open, so a burst of related actions - every keystroke in one field,
+        every frame of one drag - costs a single undo. Return the same non-<code>null</code> key for
+        actions that belong together, and <code>null</code> for anything that deserves its own step.
+    </p>
+    <CodeBlock Code="@GroupBy" Title="Registration" />
+
+    <p>
+        Only <em>consecutive</em> actions merge: a differently-keyed action, an ungrouped one, a
+        <code>Checkpoint</code>, an undo or a redo all close the open group, so the next action
+        starts a fresh step. That is what stops a step the user has already stepped away from from
+        quietly absorbing new work.
+    </p>
+    <CodeBlock Code="@GroupBySemantics" Title="What the user experiences" Compact="true" />
+
+    <Callout Kind="Callout.CalloutKind.Tip" Title="Filter, group or checkpoint?">
+        <p style="margin-bottom:0">
+            <strong>Filter</strong> when the action should never be a destination (telemetry, cursor
+            position). <strong>Group</strong> when a burst of actions is one edit to the user.
+            <strong>Checkpoint</strong> when only your component knows where the boundary is - a
+            field losing focus, a wizard step completing. They compose: group the keystrokes,
+            checkpoint on blur.
+        </p>
+    </Callout>
+
     <h2>API</h2>
     <ApiTable Title="BlexHistory" Rows="@HistoryRows" />
 
@@ -199,8 +304,13 @@
     private static readonly IReadOnlyList<ApiTable.Row> HistoryRows =
     [
         new("void Start()", "Captures the baseline and begins recording. Idempotent. Called by <code>&lt;BlexProvider&gt;</code> after rehydration."),
-        new("void Undo()", "Restores the previous state. No-op when <code>CanUndo</code> is false."),
-        new("void Redo()", "Re-applies the most recently undone state. No-op when <code>CanRedo</code> is false."),
+        new("void Undo()", "Restores the previous state. No-op when <code>CanUndo</code> is false. Shorthand for <code>Jump(-1)</code>."),
+        new("void Redo()", "Re-applies the most recently undone state. No-op when <code>CanRedo</code> is false. Shorthand for <code>Jump(1)</code>."),
+        new("void Jump(int steps)", "Moves several steps in one restore - negative undoes, positive redoes. Clamped to what the stacks hold; intermediate states are never applied."),
+        new("void JumpToPast(int index)", "Jumps to an undo-stack entry, <code>0</code> being the oldest retained state."),
+        new("void JumpToFuture(int index)", "Jumps to a redo-stack entry, <code>0</code> being the state a single <code>Redo()</code> would reach."),
+        new("IReadOnlyList&lt;string?&gt; UndoLabels", "Labels of the available undo steps, nearest first - what a history panel renders."),
+        new("IReadOnlyList&lt;string?&gt; RedoLabels", "Labels of the available redo steps, nearest first. Item <code>i</code> is <code>JumpToFuture(i)</code>."),
         new("void Checkpoint(string? label = null)", "Commits the current state as an undo step, labelled <code>label</code> (default <code>\"Checkpoint\"</code>). Pairs with a filter: the filter keeps noise out, this marks the boundaries. A checkpoint on unchanged state adds nothing."),
         new("void Clear()", "Drops both stacks and takes the current state as the new baseline."),
         new("bool CanUndo / CanRedo", "Whether there is anything to step to. Bind to a button's <code>disabled</code>."),
@@ -215,6 +325,62 @@
     private const string Setup = """
         builder.Services.AddBlexHistory();              // default: 100 entries
         builder.Services.AddBlexHistory(maxEntries: 50);
+        """;
+
+    private const string JumpApi = """
+        History.Jump(-3);          // undo three steps, applying only the destination
+        History.Jump(2);           // redo two
+        History.JumpToPast(0);     // the oldest state still retained
+        History.JumpToFuture(0);   // the same state Redo() would reach
+
+        // Labels in navigation order, for a history panel:
+        foreach (var label in History.UndoLabels)   // "counter/Increment", "contacts/Add", ...
+            Console.WriteLine(label);
+        """;
+
+    private const string JumpSource = """
+        @inject BlexHistory History
+
+        @for (var i = 0; i < History.UndoLabels.Count; i++)
+        {
+            var steps = i + 1;
+            <button @onclick="() => History.Jump(-steps)">
+                ↶ @History.UndoLabels[i]
+            </button>
+        }
+
+        @for (var i = 0; i < History.RedoLabels.Count; i++)
+        {
+            var index = i;
+            <button @onclick="() => History.JumpToFuture(index)">
+                ↷ @History.RedoLabels[i]
+            </button>
+        }
+        """;
+
+    private const string GroupBy = """
+        // Every keystroke in one field is one undo step; a different field starts a new one.
+        builder.Services.AddBlexHistory(
+            groupBy: ctx => ctx.ActionName.StartsWith("Set ") ? ctx.QualifiedName : null);
+
+        // Group a whole drag by the store that is churning, regardless of action name:
+        builder.Services.AddBlexHistory(
+            groupBy: ctx => ctx.Store.Name == "canvas" ? "drag" : null);
+        """;
+
+    private const string GroupBySemantics = """
+        // groupBy: ctx => ctx.ActionName.StartsWith("Set ") ? ctx.QualifiedName : null
+
+        store.Title = "h";     // opens a step
+        store.Title = "he";    // merges
+        store.Title = "hel";   // merges
+        store.Publish();       // its own step (and closes the group)
+        store.Title = "hello"; // opens a NEW step
+
+        // Three steps, not five:
+        History.Undo();        // -> "hel", still published
+        History.Undo();        // -> "hel", unpublished
+        History.Undo();        // -> the title before the first keystroke
         """;
 
     private const string Usage = """

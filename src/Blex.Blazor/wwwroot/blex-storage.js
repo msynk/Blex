@@ -31,20 +31,23 @@ export function remove(area, key) {
 // Cross-tab sync. The browser's `storage` event fires only in the *other* tabs sharing the origin,
 // never in the one that wrote the value, so this cannot echo our own writes back at us.
 // `e.key` is null when the area was cleared wholesale; that is forwarded as-is.
-let watcher = null;
+//
+// ES modules are cached per URL, so every importer shares this module instance. Watchers are keyed
+// by handle for the same reason connections are in blex-devtools.js: with a single slot, a second
+// storage instance (a second Blazor Server circuit, or a scope re-created by a render-mode switch)
+// silently detached the first one's listener, and that tab stopped receiving cross-tab changes with
+// no error anywhere.
+const watchers = new Map();
+let nextWatchHandle = 1;
 
 export function watch(area, handler) {
-    if (watcher) {
-        unwatch();
-    }
-
     // sessionStorage is per-tab, so a storage event can never concern it; watching it would only
     // deliver another tab's localStorage writes under the wrong area.
     if (area !== "local") {
-        return;
+        return 0;
     }
 
-    watcher = e => {
+    const listener = e => {
         if (e.storageArea && e.storageArea !== window.localStorage) {
             return;
         }
@@ -53,12 +56,19 @@ export function watch(area, handler) {
         handler.invokeMethodAsync("OnExternalChangeAsync", e.key).catch(() => { });
     };
 
-    window.addEventListener("storage", watcher);
+    window.addEventListener("storage", listener);
+
+    const handle = nextWatchHandle++;
+    watchers.set(handle, listener);
+    return handle;
 }
 
-export function unwatch() {
-    if (watcher) {
-        window.removeEventListener("storage", watcher);
-        watcher = null;
+export function unwatch(handle) {
+    const listener = watchers.get(handle);
+    if (!listener) {
+        return;
     }
+
+    watchers.delete(handle);
+    window.removeEventListener("storage", listener);
 }

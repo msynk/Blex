@@ -7,6 +7,37 @@ namespace Blex.Tests;
 
 public class EntityStateTests
 {
+    [Fact]
+    public void TryGet_DistinguishesAbsentFromDefault()
+    {
+        var adapter = new BlexEntityAdapter<int, int>(v => v);
+        var state = adapter.SetAll(adapter.GetInitialState(), [0, 5]);
+
+        Assert.True(state.TryGet(0, out var zero));
+        Assert.Equal(0, zero);
+
+        // Find cannot tell these apart when default is a legitimate value.
+        Assert.False(state.TryGet(9, out var missing));
+        Assert.Equal(0, missing);
+        Assert.Equal(0, state.Find(9));
+    }
+
+    [Fact]
+    public void SelectId_ExposesTheAdaptersOwnKeySelector()
+    {
+        var adapter = new BlexEntityAdapter<Todo, int>(t => t.Id);
+        Assert.Equal(7, adapter.SelectId(new Todo(7, "write", false)));
+        Assert.Null(adapter.SortComparer);
+    }
+
+    [Fact]
+    public void SortComparer_IsExposedWhenConfigured()
+    {
+        var comparer = Comparer<Todo>.Create((a, b) => string.CompareOrdinal(a.Text, b.Text));
+        var adapter = new BlexEntityAdapter<Todo, int>(t => t.Id, comparer);
+        Assert.Same(comparer, adapter.SortComparer);
+    }
+
     private static readonly BlexEntityAdapter<Todo, int> Adapter = new(t => t.Id);
 
     [Fact]

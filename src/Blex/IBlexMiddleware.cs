@@ -18,4 +18,17 @@ public interface IBlexMiddleware
     void BeforeAction(BlexPreActionContext context)
     {
     }
+
+    /// <summary>
+    /// Invoked when an action's body throws, before the exception continues on its way. Override
+    /// for logging, telemetry or crash reporting. The default implementation does nothing.
+    /// </summary>
+    /// <remarks>
+    /// This cannot swallow the failure -- the exception still propagates (an effect captures it
+    /// into <c>XxxError</c>, a plain action surfaces it to the caller). Cancellation is not
+    /// reported; see <see cref="BlexActionErrorContext"/>.
+    /// </remarks>
+    void OnActionError(BlexActionErrorContext context)
+    {
+    }
 }

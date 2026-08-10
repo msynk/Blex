@@ -353,6 +353,22 @@ public class DiagnosticTests
         Assert.True(generated.IndexOf("Task.Delay(250") < generated.IndexOf("BeginAction(\"Search\""));
     }
 
+    [Theory]
+    [InlineData("Dispose")]
+    [InlineData("CancelEffects")]
+    public void ActionCollidingWithADisposalMember_ReportsBLEX005(string name)
+    {
+        // These are emitted (or inherited) by BlexStoreBase, so a wrapper of the same name would
+        // hide them and silently stop cancelling in-flight effects.
+        var result = GeneratorTestHelper.Run(Usings + $$"""
+            [BlexStoreAttribute] public partial class S
+            {
+                [BlexActionAttribute] private void On{{name}}() { }
+            }
+            """);
+        Assert.True(result.HasDiagnostic("BLEX005"));
+    }
+
     [Fact]
     public void MemberInATypeNestedInsideAStore_ReportsBLEX018()
     {

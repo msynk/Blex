@@ -21,6 +21,10 @@ builder.Services.AddScoped<ThemeService>();
 var errorLog = new ErrorLog();
 builder.Services.AddSingleton(errorLog);
 
+// Same reasoning for the action-failure sink: OnActionError is captured on the singleton options.
+var failureLog = new FailureLog();
+builder.Services.AddSingleton(failureLog);
+
 // --- Blex ----------------------------------------------------------------------------------
 builder.Services.AddBlex(options =>
 {
@@ -37,6 +41,10 @@ builder.Services.AddBlex(options =>
 
     // Every non-fatal failure Blex isolates from the pipeline lands here.
     options.OnError = errorLog.Add;
+
+    // ...and every action body that throws lands here. Distinct on purpose: this one is the app's
+    // own code failing, and the exception still propagates after the hook has seen it.
+    options.OnActionError = failureLog.Add;
 });
 
 builder.Services.AddBlexStore<CounterStore>();

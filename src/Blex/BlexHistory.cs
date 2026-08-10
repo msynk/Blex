@@ -19,6 +19,8 @@ public sealed class BlexHistory : IDisposable
     private readonly List<BlexEntry> _undo = [];
     private readonly List<BlexEntry> _redo = [];
     private readonly Func<BlexActionContext, bool>? _filter;
+    private readonly Func<BlexActionContext, string?>? _groupBy;
+    private string? _lastGroupKey;
     private JsonObject? _present;
 
     // The state as of the last undo boundary (a recorded action, a checkpoint, a restore). It
@@ -41,10 +43,24 @@ public sealed class BlexHistory : IDisposable
     /// before it. Use it to keep keystroke-level noise (<c>Set Query</c>, cursor moves, telemetry
     /// stores) out of an undo stack the user thinks in terms of.
     /// </param>
+    /// <param name="groupBy">
+    /// Optional key selector that merges <em>consecutive</em> actions into a single undo step
+    /// (redux-undo's <c>groupBy</c>). Return the same non-<c>null</c> key for actions that belong
+    /// together -- typing into one field, dragging one shape -- and they collapse into one step;
+    /// return <c>null</c> to give the action its own step. Where <paramref name="filter"/> drops an
+    /// action from the stack entirely, this keeps it but folds it into the step already open.
+    /// </param>
     /// <example><code>
     /// new BlexHistory(manager, filter: ctx => !ctx.ActionName.StartsWith("Set "));
+    ///
+    /// // one undo step per edited field, however many keystrokes it took:
+    /// new BlexHistory(manager, groupBy: ctx => ctx.ActionName.StartsWith("Set ") ? ctx.QualifiedName : null);
     /// </code></example>
-    public BlexHistory(BlexManager manager, int maxEntries = 100, Func<BlexActionContext, bool>? filter = null)
+    public BlexHistory(
+        BlexManager manager,
+        int maxEntries = 100,
+        Func<BlexActionContext, bool>? filter = null,
+        Func<BlexActionContext, string?>? groupBy = null)
     {
         ArgumentNullException.ThrowIfNull(manager);
         if (maxEntries < 1)
@@ -52,6 +68,7 @@ public sealed class BlexHistory : IDisposable
         _manager = manager;
         MaxEntries = maxEntries;
         _filter = filter;
+        _groupBy = groupBy;
     }
 
     /// <summary>Maximum number of undo entries retained; older entries are discarded.</summary>
@@ -65,7 +82,18 @@ public sealed class BlexHistory : IDisposable
     /// </remarks>
     public event Action? Changed;
 
-    private void RaiseChanged() => _manager.InvokeIsolated<object?>(Changed, null, "history", null);
+    // Rendered label lists, rebuilt on demand. Every mutation of the stacks ends in RaiseChanged,
+    // so invalidating there is enough -- and it matters, because the natural way to render a
+    // history panel reads these once per item, which without a cache is quadratic.
+    private IReadOnlyList<string?>? _undoLabels;
+    private IReadOnlyList<string?>? _redoLabels;
+
+    private void RaiseChanged()
+    {
+        _undoLabels = null;
+        _redoLabels = null;
+        _manager.InvokeIsolated<object?>(Changed, null, "history", null);
+    }
 
     /// <summary>Whether there is a prior state to undo to.</summary>
     public bool CanUndo => _undo.Count > 0;
@@ -91,6 +119,55 @@ public sealed class BlexHistory : IDisposable
     /// </summary>
     public string? NextRedoLabel => _redo.Count > 0 ? _redo[^1].Label : null;
 
+    /// <summary>
+    /// The labels of the available undo steps, nearest first -- the list a history panel renders,
+    /// where item <c>i</c> is what <c>JumpToPast(UndoCount - 1 - i)</c> (equivalently
+    /// <c>Jump(-(i + 1))</c>) would revert.
+    /// </summary>
+    public IReadOnlyList<string?> UndoLabels
+    {
+        get
+        {
+            if (_undoLabels is not null)
+                return _undoLabels;
+
+            if (_undo.Count == 0)
+                return _undoLabels = [];
+
+            // Entry i holds the state *before* the action labelled by entry i+1 (the newest
+            // boundary's label lives in _presentLabel), so stepping back reverts _presentLabel
+            // first and the stack's labels after it.
+            var labels = new string?[_undo.Count];
+            labels[0] = _presentLabel;
+            for (var i = 1; i < _undo.Count; i++)
+                labels[i] = _undo[_undo.Count - i].Label;
+
+            return _undoLabels = labels;
+        }
+    }
+
+    /// <summary>
+    /// The labels of the available redo steps, nearest first -- item <c>i</c> is what
+    /// <c>JumpToFuture(i)</c> (equivalently <c>Jump(i + 1)</c>) would re-apply.
+    /// </summary>
+    public IReadOnlyList<string?> RedoLabels
+    {
+        get
+        {
+            if (_redoLabels is not null)
+                return _redoLabels;
+
+            if (_redo.Count == 0)
+                return _redoLabels = [];
+
+            var labels = new string?[_redo.Count];
+            for (var i = 0; i < _redo.Count; i++)
+                labels[i] = _redo[_redo.Count - 1 - i].Label;
+
+            return _redoLabels = labels;
+        }
+    }
+
     /// <summary>Captures the current state as the baseline and begins recording. Idempotent.</summary>
     public void Start()
     {
@@ -115,6 +192,7 @@ public sealed class BlexHistory : IDisposable
             // what the user actually sees rather than a stale pre-jump state.
             _present = _boundary = _manager.CaptureGlobalState();
             _presentLabel = null;
+            _lastGroupKey = null;
             RaiseChanged();
         }
         catch (Exception ex)
@@ -133,7 +211,13 @@ public sealed class BlexHistory : IDisposable
         try
         {
             var record = Allows(context);
-            if (record && _present is not null)
+
+            // A grouped action joins the step already open instead of starting a new one, so a
+            // whole burst (every keystroke in one field) costs a single undo.
+            var groupKey = record ? GroupKey(context) : null;
+            var merge = groupKey is not null && groupKey == _lastGroupKey;
+
+            if (record && !merge && _present is not null)
             {
                 _undo.Add(new BlexEntry(_present, _presentLabel));
                 if (_undo.Count > MaxEntries)
@@ -149,6 +233,7 @@ public sealed class BlexHistory : IDisposable
             {
                 _presentLabel = context.QualifiedName;
                 _boundary = _present;
+                _lastGroupKey = groupKey;
             }
 
             _redo.Clear();
@@ -184,6 +269,27 @@ public sealed class BlexHistory : IDisposable
     }
 
     /// <summary>
+    /// The group key for an action, or <c>null</c> when it gets its own step. A throwing selector
+    /// falls back to <c>null</c>: an extra undo step is far easier to notice -- and to live with --
+    /// than silently swallowing a step into the one before it.
+    /// </summary>
+    private string? GroupKey(BlexActionContext context)
+    {
+        if (_groupBy is null)
+            return null;
+
+        try
+        {
+            return _groupBy(context);
+        }
+        catch (Exception ex)
+        {
+            _manager.ReportError("history", ex, $"history groupBy for '{context.QualifiedName}'");
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Commits the current state as an undo boundary, as if an action named
     /// <paramref name="label"/> had just been recorded. Use it together with a filter: the filter
     /// keeps keystroke-level actions out of the stack, and this marks the points the user would
@@ -204,6 +310,11 @@ public sealed class BlexHistory : IDisposable
     public void Checkpoint(string? label = null)
     {
         _present = _manager.CaptureGlobalState();
+
+        // An explicit checkpoint always closes whatever group is open -- including the no-op case
+        // below. The caller is naming a boundary; the next action must start a fresh step even
+        // when this one had no state change of its own to commit.
+        _lastGroupKey = null;
 
         // Nothing moved since the last boundary -- a checkpoint here would be an undo step that
         // reverts to the state it was taken from. Compared as text rather than with
@@ -228,11 +339,68 @@ public sealed class BlexHistory : IDisposable
     }
 
     /// <summary>Reverts to the previous state. No-op when <see cref="CanUndo"/> is false.</summary>
-    public void Undo()
+    public void Undo() => Jump(-1);
+
+    /// <summary>Re-applies the most recently undone state. No-op when <see cref="CanRedo"/> is false.</summary>
+    public void Redo() => Jump(1);
+
+    /// <summary>
+    /// Moves <paramref name="steps"/> through the history in one go -- negative to undo, positive
+    /// to redo (redux-undo's <c>jump</c>). The intermediate states are never applied: the stacks are
+    /// walked first and only the destination is restored, so a ten-step undo costs one render, one
+    /// storage write and one <see cref="Changed"/> raise rather than ten of each.
+    /// </summary>
+    /// <param name="steps">How far to move. Clamped to what the stacks actually hold.</param>
+    public void Jump(int steps)
     {
-        if (_undo.Count == 0)
+        if (steps == 0)
             return;
 
+        var moved = 0;
+        if (steps < 0)
+        {
+            for (var i = 0; i < -steps && _undo.Count > 0; i++)
+            {
+                StepBack();
+                moved++;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < steps && _redo.Count > 0; i++)
+            {
+                StepForward();
+                moved++;
+            }
+        }
+
+        if (moved == 0 || _present is null)
+            return;
+
+        // Landing somewhere by hand ends whatever group was open; the next action must not be
+        // folded into a step the user has already stepped away from.
+        _lastGroupKey = null;
+        Restore(_present);
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// Jumps straight to an entry in the undo stack, where <c>0</c> is the oldest retained state
+    /// and <see cref="UndoCount"/><c> - 1</c> is the one a single <see cref="Undo"/> would reach --
+    /// the index space of <see cref="UndoLabels"/> reversed, and of redux-undo's <c>jumpToPast</c>.
+    /// </summary>
+    public void JumpToPast(int index) => Jump(index - _undo.Count);
+
+    /// <summary>
+    /// Jumps straight to an entry in the redo stack, where <c>0</c> is the state a single
+    /// <see cref="Redo"/> would reach (redux-undo's <c>jumpToFuture</c>) -- the index space of
+    /// <see cref="RedoLabels"/>.
+    /// </summary>
+    public void JumpToFuture(int index) => Jump(index + 1);
+
+    /// <summary>Moves the present one step back through the undo stack, without restoring.</summary>
+    private void StepBack()
+    {
         if (_present is not null)
             _redo.Add(new BlexEntry(_present, _presentLabel));
 
@@ -240,16 +408,11 @@ public sealed class BlexHistory : IDisposable
         _undo.RemoveAt(_undo.Count - 1);
         _present = _boundary = entry.State;
         _presentLabel = entry.Label;
-        Restore(entry.State);
-        RaiseChanged();
     }
 
-    /// <summary>Re-applies the most recently undone state. No-op when <see cref="CanRedo"/> is false.</summary>
-    public void Redo()
+    /// <summary>Moves the present one step forward through the redo stack, without restoring.</summary>
+    private void StepForward()
     {
-        if (_redo.Count == 0)
-            return;
-
         if (_present is not null)
             _undo.Add(new BlexEntry(_present, _presentLabel));
 
@@ -257,8 +420,6 @@ public sealed class BlexHistory : IDisposable
         _redo.RemoveAt(_redo.Count - 1);
         _present = _boundary = entry.State;
         _presentLabel = entry.Label;
-        Restore(entry.State);
-        RaiseChanged();
     }
 
     /// <summary>Clears all undo/redo history, keeping the current state as the new baseline.</summary>
@@ -268,6 +429,7 @@ public sealed class BlexHistory : IDisposable
         _redo.Clear();
         _present = _boundary = _manager.CaptureGlobalState();
         _presentLabel = null;
+        _lastGroupKey = null;
         RaiseChanged();
     }
 

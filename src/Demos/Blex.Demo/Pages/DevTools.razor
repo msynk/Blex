@@ -79,6 +79,8 @@
                 <tr><td><code>COMMIT</code></td><td>Takes the current state as the new baseline and re-initializes the monitor.</td></tr>
                 <tr><td><code>RESET</code></td><td>Restores the state captured when DevTools first connected, then re-initializes the monitor.</td></tr>
                 <tr><td><code>IMPORT_STATE</code></td><td>Applies the last computed state from an imported session.</td></tr>
+                <tr><td><code>PAUSE_RECORDING</code></td><td>Stops streaming actions to the monitor. The app keeps running: actions still apply, and still reach middleware and subscribers.</td></tr>
+                <tr><td><code>LOCK_CHANGES</code></td><td>Freezes the app - every action is vetoed until it is unlocked. Time-travel restores keep working, which is the point.</td></tr>
             </tbody>
         </table>
     </div>
@@ -88,6 +90,55 @@
         slice fails to deserialize is reported to <a href="errors"><code>OnError</code></a> and
         skipped; the rest still restore.
     </p>
+
+    <h3>Pause and lock</h3>
+    <p>
+        The monitor's two recording controls are different in kind, and the difference matters when
+        you are hunting a bug. <strong>Pause recording</strong> is about the <em>timeline</em>: the
+        app carries on exactly as before, it just stops filling the monitor with noise while you set
+        up the state you actually want to inspect. <strong>Lock changes</strong> is about the
+        <em>app</em>: every action is refused, so nothing can move underneath you while you scrub.
+    </p>
+    <p>
+        Both are readable from the manager, so the UI can tell the user why its buttons appear dead:
+    </p>
+    <CodeBlock Code="@PauseLock" />
+
+    <DemoCard Title="What the monitor's buttons do here"
+              Description="Open the Redux DevTools panel and press Pause recording or Lock changes, then use the counter. This card reads the manager's own flags."
+              Source="@PauseLockSource" SourceLanguage="razor">
+        <div class="row">
+            <button class="btn btn-primary" @onclick="Counter.Increment">Increment</button>
+        </div>
+
+        <div class="readout" style="margin-top:0.8rem">
+            <div class="readout__item">
+                <span class="readout__label">counter/Count</span>
+                <span class="readout__value readout__value--accent">@Counter.Count</span>
+            </div>
+            <div class="readout__item">
+                <span class="readout__label">IsDevToolsPaused</span>
+                <span class="readout__value">@Manager.IsDevToolsPaused</span>
+            </div>
+            <div class="readout__item">
+                <span class="readout__label">AreChangesLocked</span>
+                <span class="readout__value">@Manager.AreChangesLocked</span>
+            </div>
+        </div>
+
+        <p class="small muted" style="margin-top:0.8rem;margin-bottom:0">
+            Paused, the counter still moves but the monitor stays quiet. Locked, the counter stops
+            moving - and the slider still works.
+        </p>
+    </DemoCard>
+
+    <Callout Kind="Callout.CalloutKind.Note" Title="Disconnecting always unlocks">
+        <p style="margin-bottom:0">
+            Closing the monitor, or tearing down a circuit, while "Lock changes" was on would
+            otherwise leave the application permanently frozen with no remaining way to unfreeze it.
+            Disconnecting the bridge clears both flags.
+        </p>
+    </Callout>
 
     <h2>Redacting sensitive state</h2>
     <p>
@@ -193,6 +244,25 @@
         new("options.DevToolsStateSanitizer", "<code>Func&lt;JsonObject, JsonObject&gt;</code>. Full control over the tree before it is sent. Display only."),
         new("options.DevToolsActionSanitizer", "<code>Func&lt;string, string&gt;</code>. Rewrites the action label - useful for stripping ids out of names."),
     ];
+
+    private const string PauseLock = """
+        // Paused: actions apply and are observed, they are just not streamed to the monitor.
+        if (manager.IsDevToolsPaused)
+            _hint = "DevTools recording is paused.";
+
+        // Locked: every action is vetoed, exactly as a UseFilter returning false would.
+        // Restores are deliberately not gated, so the slider still moves.
+        if (manager.AreChangesLocked)
+            _hint = "The monitor has locked changes - unlock it to interact.";
+        """;
+
+    private const string PauseLockSource = """
+        @inject BlexManager Manager
+
+        <p>Paused: @Manager.IsDevToolsPaused &middot; Locked: @Manager.AreChangesLocked</p>
+
+        @* Nothing to wire up: both flags are set from the extension's own messages. *@
+        """;
 
     private const string Naming = """
         builder.Services.AddBlex(options =>

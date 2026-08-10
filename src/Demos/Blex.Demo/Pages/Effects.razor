@@ -51,6 +51,17 @@
         </p>
     </Callout>
 
+    <Callout Kind="Callout.CalloutKind.Tip" Title="Disposing a store cancels its effects">
+        <p style="margin-bottom:0">
+            A store is <code>IDisposable</code>, and its container disposes it - a Blazor Server
+            circuit ending, a test scope closing. That cancels every in-flight effect and stops any
+            pending debounce timer, so a request started moments before teardown does not carry on
+            resuming against a dead renderer. It counts as the effect's own cancellation, so it
+            populates no <code>Error</code>; the store itself stays usable, because disposal ordering
+            must not be able to strand a final persistence flush.
+        </p>
+    </Callout>
+
     <h2>Concurrency</h2>
     <p>
         <code>[BlexEffect(Concurrency = …)]</code> decides what happens when a run starts while another

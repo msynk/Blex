@@ -12,6 +12,15 @@ public sealed class BlexBrowserStorage : IBlexStorage, IBlexExternalStorageChang
     private readonly string _area;
     private IJSObjectReference? _module;
     private DotNetObjectReference<BlexBrowserStorage>? _self;
+
+    /// <summary>
+    /// Handle identifying this instance's <c>storage</c> listener inside the shared JS module
+    /// (0 = none). The module is cached per URL, so every storage instance on the page shares it;
+    /// without a handle, a second instance's <c>unwatch</c> would detach whichever listener happened
+    /// to be registered last.
+    /// </summary>
+    private int _watchHandle;
+
     private bool _watching;
 
     /// <summary>Creates a storage instance over the given Web Storage area.</summary>
@@ -40,8 +49,8 @@ public sealed class BlexBrowserStorage : IBlexStorage, IBlexExternalStorageChang
 
         var module = await ModuleAsync(cancellationToken);
         _self ??= DotNetObjectReference.Create(this);
-        await module.InvokeVoidAsync("watch", cancellationToken, _area, _self);
-        _watching = true;
+        _watchHandle = await module.InvokeAsync<int>("watch", cancellationToken, _area, _self);
+        _watching = _watchHandle > 0;
     }
 
     /// <summary>Invoked from JS when another tab wrote to this origin's storage.</summary>
@@ -90,8 +99,9 @@ public sealed class BlexBrowserStorage : IBlexStorage, IBlexExternalStorageChang
                 // storage write in every other tab.
                 if (_watching)
                 {
-                    await _module.InvokeVoidAsync("unwatch");
+                    await _module.InvokeVoidAsync("unwatch", _watchHandle);
                     _watching = false;
+                    _watchHandle = 0;
                 }
 
                 await _module.DisposeAsync();

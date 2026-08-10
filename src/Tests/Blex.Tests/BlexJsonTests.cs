@@ -71,4 +71,32 @@ public class BlexJsonTests : IDisposable
 
         Assert.False(BlexJson.Options.WriteIndented);
     }
+
+    [Fact]
+    public void ASourceGeneratedResolver_DrivesGeneratedSnapshots()
+    {
+        // The trimming/AOT story: generated SerializeState/DeserializeState go through
+        // BlexJson.Options, so pointing its TypeInfoResolver at a JsonSerializerContext is all it
+        // takes to keep snapshots working in a trimmed Blazor WebAssembly publish, where the
+        // reflection-based serializer cannot be relied on.
+        BlexJson.Configure(o => o.TypeInfoResolver = BlexTestJsonContext.Default);
+
+        var store = new CounterStore();
+        store.Count = 3;
+        store.Label = "loaded";
+
+        var snapshot = store.SerializeState();
+        Assert.Equal(3, snapshot["Count"]!.GetValue<int>());
+
+        var restored = new CounterStore();
+        restored.RestoreState(snapshot);
+        Assert.Equal(3, restored.Count);
+        Assert.Equal("loaded", restored.Label);
+    }
 }
+
+/// <summary>Source-generated metadata for the types <see cref="CounterStore"/> puts in its snapshot.</summary>
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(string))]
+internal sealed partial class BlexTestJsonContext : JsonSerializerContext;

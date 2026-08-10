@@ -60,15 +60,20 @@ public static class BlexMauiServiceCollectionExtensions
     /// <param name="maxEntries">Maximum number of undo entries retained.</param>
     /// <param name="filter">
     /// Optional predicate deciding which actions become their own undo step. See
-    /// <see cref="BlexHistory(BlexManager, int, Func{BlexActionContext, bool})"/>.
+    /// <see cref="BlexHistory(BlexManager, int, Func{BlexActionContext, bool}, Func{BlexActionContext, string})"/>.
+    /// </param>
+    /// <param name="groupBy">
+    /// Optional key selector that merges consecutive actions into a single undo step (redux-undo's
+    /// <c>groupBy</c>).
     /// </param>
     public static MauiAppBuilder AddBlexHistory(
         this MauiAppBuilder builder,
         int maxEntries = 100,
-        Func<BlexActionContext, bool>? filter = null)
+        Func<BlexActionContext, bool>? filter = null,
+        Func<BlexActionContext, string?>? groupBy = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        builder.Services.AddBlexHistory(maxEntries, ServiceLifetime.Singleton, filter);
+        builder.Services.AddBlexHistory(maxEntries, ServiceLifetime.Singleton, filter, groupBy);
         return builder;
     }
 

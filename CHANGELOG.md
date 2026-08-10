@@ -4,7 +4,136 @@ All notable changes to Blex are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`OnActionError`: a hook for the action bodies themselves failing.** Middleware could see an
+  action before and after it ran, but never that it *threw* - and an effect deliberately swallows
+  its exception into `XxxError` so the UI can render it, which meant nothing else ever heard about
+  the failure. `IBlexMiddleware.OnActionError(BlexActionErrorContext)`, `BlexManager.ActionFailed`
+  and `options.OnActionError` report it, with the store, action, arguments and exception. The hook
+  observes and cannot handle: the exception continues on its way exactly as before, so adding a
+  crash reporter never changes what the application does. Cancellation is not reported - an
+  `OperationCanceledException` is the documented outcome of `CancelXxx()`, of a `Latest` run being
+  superseded and of disposing a store, and burying real failures under a type-ahead's worth of those
+  would defeat the point.
+- **Multi-step history navigation.** `BlexHistory.Jump(n)`, `JumpToPast(index)` and
+  `JumpToFuture(index)` (redux-undo's `jump`/`jumpToPast`/`jumpToFuture`) move several steps in one
+  restore - the stacks are walked first and only the destination is applied, so a ten-step undo
+  costs one render, one storage write and one `Changed` raise instead of ten of each. `UndoLabels`
+  and `RedoLabels` name the steps in navigation order, which is what a history panel needs and what
+  `NextUndoLabel` alone could not provide.
+- **`groupBy` for history.** Where a filter drops an action from the stack entirely, grouping keeps
+  it and folds it into the step already open, so a burst of related actions - every keystroke in one
+  field, every frame of one drag - costs a single undo. Only consecutive actions merge: a
+  differently-keyed action, an ungrouped one, a `Checkpoint`, an undo or a redo all close the open
+  group, so a step the user has already stepped away from cannot quietly absorb new work.
+- **Hydration status on the persistor.** `HasHydrated`, the `Hydrated` event and
+  `WhenHydratedAsync()` (zustand's `hasHydrated`/`onFinishHydration`) say whether a persisted store
+  holds the user's data or its declared defaults. Hydration is not instantaneous - browser storage
+  sits behind JS interop, a Blazor Server prerender cannot reach it, `SkipHydration` defers it on
+  purpose - so without this a full cart briefly renders as "0 items". The awaitable form is released
+  on disposal, so a persistor torn down before it ever hydrated leaves nobody awaiting forever.
+- **`options.Merge`**, for deciding how a stored payload meets the live store when the default
+  shallow merge is not enough: a nested object combined key by key rather than replaced wholesale,
+  or a value the live store must win on because it was assigned before hydration finished. Runs for
+  cross-tab changes too, so both paths agree on what "applying stored state" means; returning `null`
+  (or throwing, which is reported) discards the payload rather than applying half of it.
+- **`BlexComparers.Sequence<T>()` / `Set<T>()`.** A selector projecting a collection defeats itself:
+  `() => store.Items.Where(...)` builds a new object on every evaluation, so the default reference
+  comparison always reports a change and the subscription fires on every action - exactly what
+  selecting a projection was meant to avoid. These are the content comparers that fix it, the job
+  zustand's `shallow` does.
+- **Stores are `IDisposable`, and disposal cancels in-flight effects.** A DI container disposes the
+  stores it created - a Blazor Server circuit ending, a test scope closing - and until now an effect
+  started moments before teardown carried on resuming against a dead renderer, with any pending
+  debounce timer still running. The generator now emits a `CancelEffects` override that cancels
+  every effect token source and debounce gate. It counts as the effect's own cancellation, so it
+  populates no `Error`, and the store stays usable afterwards: disposal ordering must not be able to
+  strand a final persistence flush. `Dispose`, `IsDisposed` and `CancelEffects` join the BLEX005
+  reserved names.
+- **`BlexEntityState.TryGet(id, out entity)`**, the unambiguous lookup `Find` cannot be: for a struct
+  entity `default` is a legitimate value, so `Find` cannot distinguish "absent" from "present and
+  zero", and `Contains` followed by `Find` hashes the key twice. Plus
+  `BlexEntityAdapter.SelectId(entity)` and `SortComparer`, so callers can key entities the way the
+  adapter does instead of repeating the key expression at every call site, where a second copy can
+  silently diverge.
+- **The DevTools monitor's recording controls.** `PAUSE_RECORDING` stops streaming actions without
+  freezing the app (they still apply, and still reach middleware and subscribers); `LOCK_CHANGES`
+  vetoes every action while leaving time-travel restores working, which is the point of the button.
+  Both are readable as `manager.IsDevToolsPaused` / `manager.AreChangesLocked`, and both are cleared
+  when the bridge disconnects - a monitor closed while locked would otherwise leave the application
+  permanently frozen with no remaining way to unfreeze it.
+
+- **`manager.CreateSelector(...)`: a memoized cross-store derived value** -- what
+  `[BlexComputed]` is to a single store, lifted to the manager. `Subscribe(selector, …)`
+  answers a different question (tell one observer when a projection moved) and evaluates eagerly
+  after every action whether anyone reads it or not; this one is lazy and shared, so three
+  components binding to the same cross-store total pay for one computation per action instead of
+  three, and an action none of them read costs a flag write. Selectors compose, and a failed
+  computation is not cached.
+- **`BlexEntityState`'s indexer**, `state[id]`, for the lookups where absence is a bug rather than a
+  case to handle.
+- **`manager.WaitForAsync(...)`** in `Blex.Testing`, for a condition that spans stores or that the
+  store being driven will not report. Re-checked after every action *and* every restore, where
+  `store.WaitForAsync` watches one store's notifications.
+- **Test-harness support for more than one store.** `harness.Register(store)` brings a second store
+  onto the harness's manager, so cross-store coordination is testable without abandoning the harness
+  and hand-wiring a manager - the setup it exists to remove. `harness.Failures` records every action
+  whose body threw, which an effect otherwise hides inside `XxxError`.
+- **Trimming/AOT guidance.** Snapshots go through `System.Text.Json`, whose reflection-based
+  metadata a trimmed publish (the Blazor WebAssembly release default) can strip. Pointing
+  `BlexJson.Configure(o => o.TypeInfoResolver = AppJsonContext.Default)` at a source-generated
+  context now has a documented, tested path through every generated `SerializeState`.
+
+### Changed
+
+- **Middleware runs in registration order.** DI-resolved middleware used to be hoisted ahead of
+  instance and delegate middleware regardless of how they were interleaved, so a pipeline read in
+  one order and ran in another - and since the first veto short-circuits the rest, that could decide
+  which filter got consulted at all. Types and instances now share one ordered list. Middleware
+  registered straight into the service collection, rather than through the options, is appended
+  after it (and de-duplicated). A middleware type is also registered concretely, so injecting it as
+  `IBlexMiddleware` or as itself yields the same instance within a scope rather than two copies with
+  divergent state.
+
 ### Fixed
+
+- **The DevTools "Pause recording" and "Lock changes" buttons could never reach Blex.** The JS
+  bridge advertised `features: { pause: false }` and did not list `lock` at all, and the extension
+  allows exactly the features listed as true - so the monitor hid both controls. They are now
+  advertised and handled.
+- **A second browser-storage instance silently stole the first one's cross-tab listener.** The JS
+  module is cached per URL and held its `storage` watcher in a single slot, so a second instance
+  (a second Blazor Server circuit, or a scope re-created by a render-mode switch) detached the
+  previous listener on registration, and that circuit stopped receiving cross-tab changes with no
+  error anywhere. Watchers are keyed by handle now, the way DevTools connections already were.
+- **One failure was reported once per dispatch frame.** An action calling another action - or an
+  effect body calling one - sends the same exception out through several frames, so a crash reporter
+  saw one nested failure as several. The innermost frame, which names the action that actually
+  threw, reports it and the outer ones re-throw silently.
+- The `Blex.Blazor` bridges had no test coverage at all -- the test project did not even reference
+  the assembly, yet the connector and the storage bridge hold the real logic (connection handles,
+  watcher handles, which module function gets which arguments). Both are now covered through
+  hand-written interop fakes, which is how the two handle bugs above were found.
+- **`BlexHistory.UndoLabels`/`RedoLabels` rebuilt their array on every access**, which made the
+  natural way to render a history panel (`for (i < UndoLabels.Count) … UndoLabels[i]`) quadratic.
+  They are cached and invalidated whenever the stacks change.
+- **A synchronous action dispatched while an async action of the same store was awaiting bypassed
+  every veto filter.** The previous release fixed this for asynchronous actions but left `Dispatch`
+  gating its `BeforeAction` call on the record depth, which is also raised by an unrelated in-flight
+  effect - so for as long as any effect was awaiting, `UseFilter(...)` guard rails did not apply to
+  plain synchronous actions. Both paths now gate on the synchronous nesting depth, which
+  distinguishes "lexically nested inside a running action" (must not re-veto) from "another action
+  of this store is still awaiting" (must). Raw property assignments are deliberately unchanged: a
+  `Set X` carries no way to tell the action's own body from an outside mutation mid-await, so it
+  stays attributed to the action in flight, as documented.
+- **A manager-level selector subscription never re-evaluated after a state restore.** It watched
+  `ActionDispatched` only, but undo/redo, DevTools time-travel and incoming cross-tab changes all
+  move state without dispatching anything - so the subscription kept reporting a value the
+  application no longer held. It now observes `StateRestored` as well, with the same error isolation.
+- **A `Checkpoint` on unchanged state left the open history group open.** The no-op short-circuit
+  returned before clearing the group key, so the next action merged into a step the user had already
+  asked to close.
 
 - **A vetoed effect no longer leaves a trace.** `BlexPreActionContext.Cancel()` promises the action
   does not run, but the generated effect wrapper took the decision *after* it had already
@@ -134,12 +263,12 @@ All notable changes to Blex are documented here.
   `$reset` across the whole tree. Each store resets as its own normal, vetoable, observable,
   persisted and time-travelable `ResetState` action, and a store that fails is reported and skipped
   rather than aborting the rest.
-- **`BLEX018`**: a `[BlexStateAttribute]`, `[BlexComputedAttribute]`, `[BlexActionAttribute]` or
-  `[BlexEffectAttribute]` member outside a `[BlexStoreAttribute]` class is now a warning. It is the
+- **`BLEX018`**: a `[BlexState]`, `[BlexComputed]`, `[BlexAction]` or
+  `[BlexEffect]` member outside a `[BlexStore]` class is now a warning. It is the
   one mistake that compiles cleanly and generates nothing at all, which reads like a broken
   generator.
 
-- **`[BlexEffectAttribute(DebounceMilliseconds = n)]`** gates an effect behind a quiet period - the
+- **`[BlexEffect(DebounceMilliseconds = n)]`** gates an effect behind a quiet period - the
   search-as-you-type case that previously meant hand-rolling a `CancellationTokenSource` and a
   `Task.Delay` in every store. The wait happens before anything observable, so a superseded
   invocation never flips `XxxIsLoading`, never clears `XxxError`, is never offered to middleware and

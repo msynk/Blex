@@ -112,6 +112,59 @@
         </p>
     </Callout>
 
+    <h2>Derived values that span stores</h2>
+    <p>
+        A subscription answers "tell me when this changed". The other half of the problem is "give me
+        this value, cheaply, from several places at once" - and that is what
+        <code>[BlexComputed]</code> does inside one store. <code>CreateSelector</code> lifts it to
+        the manager: a lazy, memoized projection over the whole tree that recomputes at most once per
+        action, however many readers ask for it.
+    </p>
+    <CodeBlock Code="@SelectorSample" />
+
+    <DemoCard Title="One computation, three readers"
+              Description="Every card below reads the same selector. Place an order and watch the computation counter move once, not three times - and not at all until something reads it."
+              Source="@SelectorDemoSource">
+        <div class="row">
+            <button class="btn btn-primary" @onclick="PlaceOrder">Place an order</button>
+            <button class="btn" @onclick="Orders.CancelLast" disabled="@(Orders.Count == 0)">Cancel last</button>
+            <button class="btn btn-ghost" @onclick="ResetSelectorCounter">Reset counter</button>
+        </div>
+
+        <div class="grid grid--3" style="margin-top:0.9rem">
+            <div class="card">
+                <p class="card__title">Reader A <span class="card__num">@Summary.Value</span></p>
+            </div>
+            <div class="card">
+                <p class="card__title">Reader B <span class="card__num">@Summary.Value</span></p>
+            </div>
+            <div class="card">
+                <p class="card__title">Reader C <span class="card__num">@Summary.Value</span></p>
+            </div>
+        </div>
+
+        <div class="readout" style="margin-top:0.9rem">
+            <div class="readout__item">
+                <span class="readout__label">Projection ran</span>
+                <span class="readout__value readout__value--accent">@_selectorRuns time(s)</span>
+            </div>
+            <div class="readout__item">
+                <span class="readout__label">Renders of this page</span>
+                <span class="readout__value">@_renders</span>
+            </div>
+        </div>
+    </DemoCard>
+
+    <Callout Kind="Callout.CalloutKind.Tip" Title="Subscribe pushes, CreateSelector pulls">
+        <p style="margin-bottom:0">
+            <code>Subscribe(selector, …)</code> evaluates eagerly after every action so it can tell
+            one observer that the value moved - use it when something must <em>happen</em>.
+            <code>CreateSelector</code> evaluates lazily and shares the result - use it when
+            something must be <em>read</em>. An action whose result nobody reads costs a flag write.
+            Dispose the selector (or hand it to <code>OwnsSubscription</code>) to detach it.
+        </p>
+    </Callout>
+
     <h2>Where to put the wiring</h2>
     <p>Three practical options, in rough order of preference:</p>
     <ul>
@@ -155,9 +208,28 @@
     private string _item = "Widget";
     private int _qty = 1;
 
+    private int _selectorRuns;
+    private int _renders;
+    private int _placed;
+
+    /// <summary>
+    /// A cross-store derived value, memoized by the manager. Every reader below shares it, and it
+    /// recomputes at most once per action - lazily, so an action nobody reads costs nothing.
+    /// </summary>
+    private BlexSelector<string> Summary { get; set; } = default!;
+
     protected override void OnInitialized()
     {
         Subscribe(Orders, Notifications);
+
+        Summary = Manager.CreateSelector(() =>
+        {
+            _selectorRuns++;
+            return $"{Orders.Units} unit(s) · {Notifications.Unread} message(s)";
+        });
+
+        // The selector holds a manager subscription, so the component owns its lifetime.
+        OwnsSubscription(Summary);
 
         // The wiring: react to one store's actions by driving another. The token is handed to the
         // base class so it is disposed with this component.
@@ -175,6 +247,12 @@
             }
         }));
     }
+
+    protected override void OnAfterRender(bool firstRender) => _renders++;
+
+    private void PlaceOrder() => Orders.Place($"Gadget {++_placed}", 2);
+
+    private void ResetSelectorCounter() => _selectorRuns = 0;
 
     private void OnItemInput(ChangeEventArgs e) => _item = e.Value?.ToString() ?? "";
 
@@ -225,7 +303,9 @@
         new("IDisposable SubscribeTo&lt;TStore&gt;(Action&lt;…&gt;)", "Only actions from that store type."),
         new("IDisposable SubscribeToAction(string, Action&lt;…&gt;)", "Matches the bare name (<code>\"Increment\"</code>) or the qualified name (<code>\"counter/Increment\"</code>)."),
         new("IDisposable SubscribeAsync(Func&lt;…, Task&gt;, Func&lt;…, bool&gt;? filter)", "An async reactor. The task is observed; failures are reported rather than left unobserved."),
-        new("IDisposable Subscribe&lt;T&gt;(Func&lt;T&gt; selector, Action&lt;T&gt;, IEqualityComparer&lt;T&gt;?, bool fireImmediately)", "Fires only when a projection <em>spanning stores</em> changes. An <code>Action&lt;T, T&gt;</code> overload delivers <code>(previous, current)</code>. See <a href=\"subscriptions\">Subscriptions</a>."),
+        new("IDisposable Subscribe&lt;T&gt;(Func&lt;T&gt; selector, Action&lt;T&gt;, IEqualityComparer&lt;T&gt;?, bool fireImmediately)", "Fires only when a projection <em>spanning stores</em> changes. An <code>Action&lt;T, T&gt;</code> overload delivers <code>(previous, current)</code>. Re-evaluated after restores too. See <a href=\"subscriptions\">Subscriptions</a>."),
+        new("BlexSelector&lt;T&gt; CreateSelector&lt;T&gt;(Func&lt;T&gt;)", "A lazy, memoized derived value over the whole tree - <code>[BlexComputed]</code> lifted to the manager. Read <code>.Value</code>; it recomputes at most once per action, and only when something reads it. Dispose to detach."),
+        new("event Action&lt;BlexActionErrorContext&gt;? ActionFailed", "Raised when an action body throws. The exception still propagates. See <a href=\"middleware\">Middleware</a>."),
     ];
 
     private static readonly IReadOnlyList<ApiTable.Row> StateRows =
@@ -248,6 +328,43 @@
         new("DateTimeOffset Timestamp", "When the action completed, in UTC."),
         new("JsonObject GlobalState", "The whole state tree immediately after the action. Captured lazily on first access."),
     ];
+
+    private const string SelectorSample = """
+        // Created once, read from anywhere.
+        var summary = manager.CreateSelector(
+            () => $"{orders.Units} unit(s) · {notifications.Unread} message(s)");
+
+        summary.Value;   // computes
+        summary.Value;   // cached
+        orders.Place("Widget", 2);
+        summary.Value;   // recomputes, once, for every reader
+
+        summary.Dispose();   // detaches from the manager
+
+        // In a component, let the base class own it:
+        protected override void OnInitialized()
+        {
+            _summary = Manager.CreateSelector(() => Orders.Units + Cart.Lines.Count);
+            OwnsSubscription(_summary);
+        }
+        """;
+
+    private const string SelectorDemoSource = """
+        private BlexSelector<string> Summary { get; set; } = default!;
+
+        protected override void OnInitialized()
+        {
+            Summary = Manager.CreateSelector(() =>
+                $"{Orders.Units} unit(s) · {Notifications.Unread} message(s)");
+
+            OwnsSubscription(Summary);   // disposed with the component
+        }
+
+        // Every reader shares one computation per action:
+        //   <p>@Summary.Value</p>
+        //   <p>@Summary.Value</p>
+        //   <p>@Summary.Value</p>
+        """;
 
     private const string SubscribeSample = """
         // Everything from one store type

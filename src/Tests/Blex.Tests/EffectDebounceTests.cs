@@ -16,7 +16,13 @@ namespace Blex.Tests;
 /// </summary>
 public class EffectDebounceTests
 {
-    private const int Quiet = 40;
+    /// <summary>
+    /// Mirrors <c>DebounceMilliseconds</c> on <c>EffectConcurrencyStore</c>'s debounced effects.
+    /// Several tests assert on state <em>inside</em> the quiet period, so the window has to stay
+    /// wider than a scheduling hiccup on a loaded two-core CI runner - a value tuned to a developer
+    /// machine turns those assertions into a race that only fails in CI.
+    /// </summary>
+    private const int Quiet = 250;
 
     /// <summary>Long enough for the gate to elapse, short enough to keep the suite fast.</summary>
     private static Task SettleAsync() => Task.Delay(Quiet * 4);
