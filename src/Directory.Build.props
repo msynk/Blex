@@ -15,7 +15,7 @@
   <!-- Package identity. Only the four library projects opt in with <IsPackable>true</IsPackable>. -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Saleh Yusefnejad</Authors>
     <Product>Blex</Product>
     <Copyright>Copyright (c) 2026 Saleh Yusefnejad</Copyright>

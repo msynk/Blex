@@ -4,6 +4,8 @@ All notable changes to Blex are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-10
+
 ### Added
 
 - **`OnActionError`: a hook for the action bodies themselves failing.** Middleware could see an
@@ -86,6 +88,37 @@ All notable changes to Blex are documented here.
   context now has a documented, tested path through every generated `SerializeState`.
 
 ### Changed
+
+- **Breaking: every public type is now prefixed `Blex`.** The library used to mix three naming
+  conventions - bare names (`StoreBase`, `EntityAdapter`), prefixed ones (`BlexManager`) and a
+  suffixed one (`PreferencesBlexStorage`) - so nothing about a name told you where it came from,
+  and the bare ones collided with types an application is likely to own itself: `Store`, `State`,
+  `Action`, `Effect`, `EntityState` are all ordinary words in an ordinary domain model. One prefix
+  fixes both: names are unambiguous at the use site, and a `using Blex;` can no longer shadow the
+  application's own vocabulary. The namespaces (`Blex`, `Blex.Blazor`, `Blex.Maui`,
+  `Blex.Testing`), the package IDs, every registration method (`AddBlex`, `AddBlexStore`,
+  `AddBlexHistory`, `AddBlexPersistence`, `UseBlex`, ...) and every `BLEXnnn` diagnostic ID are
+  unchanged, so the migration is a rename and nothing else - member names, signatures and
+  behaviour are untouched.
+
+  Attributes: `[Store]` -> `[BlexStore]`, `[State]` -> `[BlexState]`, `[Computed]` ->
+  `[BlexComputed]`, `[Action]` -> `[BlexAction]`, `[Effect]` -> `[BlexEffect]`.
+
+  `Blex`: `IStore` -> `IBlexStore`, `StoreBase` -> `BlexStoreBase`, `EntityState<T>` ->
+  `BlexEntityState<T>`, `EntityAdapter<T>` -> `BlexEntityAdapter<T>`, `StatePersistor` ->
+  `BlexStatePersistor`, `DelegateMiddleware` -> `BlexDelegateMiddleware`, `FilterMiddleware` ->
+  `BlexFilterMiddleware`, `EffectConcurrency` -> `BlexEffectConcurrency`, `ActionArg` ->
+  `BlexActionArg`.
+
+  `Blex.Blazor`: `BrowserStorage` -> `BlexBrowserStorage`, `BrowserStorageKind` ->
+  `BlexBrowserStorageKind`, `ComponentStatePersistence` -> `BlexComponentStatePersistence`,
+  `ReduxDevToolsConnector` -> `BlexReduxDevToolsConnector`. `Blex.Maui`:
+  `PreferencesBlexStorage` -> `BlexPreferencesStorage`. `Blex.Testing`: `ActionLog` ->
+  `BlexActionLog`, `RecordedAction` -> `BlexRecordedAction`.
+
+  The extension-method holders were renamed too (`ServiceCollectionExtensions` ->
+  `BlexServiceCollectionExtensions`, and likewise for the persistence, MAUI and subscription ones),
+  which callers only notice if they invoked an extension method as a static.
 
 - **Middleware runs in registration order.** DI-resolved middleware used to be hoisted ahead of
   instance and delegate middleware regardless of how they were interleaved, so a pipeline read in

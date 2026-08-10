@@ -828,6 +828,28 @@ dotnet run --project src/Demos/Blex.Sample   # minimal sample app
 dotnet pack src/Blex.slnx -c Release         # nupkg + snupkg into artifacts/packages
 ```
 
+## Upgrading from 0.2.x
+
+0.3.0 renames every public type to carry the `Blex` prefix, so a `using Blex;` can no longer
+shadow the words an application's own domain model is likely to use (`Store`, `State`, `Action`,
+`Effect`, `EntityState`). Namespaces, package IDs, registration methods (`AddBlex`,
+`AddBlexStore`, `UseBlex`, ...), member names, signatures and behaviour are all unchanged - the
+upgrade is a rename and nothing else:
+
+| 0.2.x | 0.3.0 |
+|---|---|
+| `[Store]` `[State]` `[Computed]` `[Action]` `[Effect]` | `[BlexStore]` `[BlexState]` `[BlexComputed]` `[BlexAction]` `[BlexEffect]` |
+| `IStore`, `StoreBase` | `IBlexStore`, `BlexStoreBase` |
+| `EntityState<T>`, `EntityAdapter<T>` | `BlexEntityState<T>`, `BlexEntityAdapter<T>` |
+| `DelegateMiddleware`, `FilterMiddleware` | `BlexDelegateMiddleware`, `BlexFilterMiddleware` |
+| `StatePersistor`, `ActionArg`, `EffectConcurrency` | `BlexStatePersistor`, `BlexActionArg`, `BlexEffectConcurrency` |
+| `BrowserStorage`, `BrowserStorageKind`, `ComponentStatePersistence`, `ReduxDevToolsConnector` | `BlexBrowserStorage`, `BlexBrowserStorageKind`, `BlexComponentStatePersistence`, `BlexReduxDevToolsConnector` |
+| `PreferencesBlexStorage` | `BlexPreferencesStorage` |
+| `ActionLog`, `RecordedAction` | `BlexActionLog`, `BlexRecordedAction` |
+
+The full list, including the extension-method holders, is in
+[CHANGELOG.md](https://github.com/msynk/Blex/blob/main/CHANGELOG.md#030---2026-08-10).
+
 ## Releasing
 
 Package metadata (version, authors, tags, readme, icon, Source Link) is centralised in
@@ -836,7 +858,7 @@ To publish:
 
 1. Bump `<Version>` there and move the `[Unreleased]` section of
    [CHANGELOG.md](https://github.com/msynk/Blex/blob/main/CHANGELOG.md) under the new version heading.
-2. Commit, then tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
+2. Commit, then tag and push: `git tag v0.3.0 && git push origin v0.3.0`.
 3. The [Release workflow](https://github.com/msynk/Blex/blob/main/.github/workflows/release.yml)
    verifies that the tag matches
    `<Version>`, builds, tests, packs, and pushes every package plus its symbol package to

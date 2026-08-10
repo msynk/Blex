@@ -13,7 +13,7 @@ name: Release
 #      owner; reserving the prefix is what stops that pattern spreading.)
 #
 # To ship: bump <Version> in src/Directory.Build.props, update CHANGELOG.md, commit, then
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v0.3.0 && git push origin v0.3.0
 # The tag must match the version in Directory.Build.props or the job fails before publishing.
 
 on:
