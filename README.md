@@ -1,3 +1,5 @@
+**Note**: moved to bitplatform (https://blex.bitplatform.dev)
+
 ![Blex](https://raw.githubusercontent.com/msynk/Blex/main/assets/icon.png)
 
 # Blex
